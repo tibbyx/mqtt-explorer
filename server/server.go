@@ -57,10 +57,6 @@ func PostDisconnectHandler(mqttClient *mqtt.Client, mqttUserConfig *MqttUserConf
 	}
 }
 
-type Number struct {
-	Id int
-}
-
 func main() {
 	server := fiber.New()
 
