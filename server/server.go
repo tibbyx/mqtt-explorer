@@ -17,17 +17,15 @@ func printMqttUserConfig(mqttUserConfig *MqttUserConfig) {
 	fmt.Println("topic    : ", mqttUserConfig.Topic)
 }
 
-func PostConnectHandler() fiber.Handler {
+func PostConnectHandler(mqttClient *mqtt.Client, mqttUserConfig *MqttUserConfig) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		var mqttUserConfig MqttUserConfig
 		var mqttOpts *mqtt.ClientOptions 
-		var mqttClient mqtt.Client
 
 		if err := c.BodyParser(&mqttUserConfig); err != nil {
 			return c.SendString("I am nowt sowwy >:3, but an expected! ewwow has happened. Youw weak json! iws of the wwongest fowmat thawt does nowt cowwespond tuwu the stwong awnd independent stwuct! >:P\n")
 		}
 
-		printMqttUserConfig(&mqttUserConfig)
+		printMqttUserConfig(mqttUserConfig)
 
 		// TODO: It would be nice to validate the IP before this
 
@@ -38,38 +36,23 @@ func PostConnectHandler() fiber.Handler {
 		// TODO: Figure out how to use the handler.
 		// mqttState.mqttOpts.SetDefaultPublishHandler(<INSERT HANDLER HERE>)
 
-		mqttClient = mqtt.NewClient(mqttOpts)
+		*mqttClient = mqtt.NewClient(mqttOpts)
 
-		if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
+		if token := (*mqttClient).Connect(); token.Wait() && token.Error() != nil {
 			return c.SendString(fmt.Sprintf("Failure at connecting to IP: %s Topic: %s.\nError Message: %s\n",	mqttUserConfig.Ip, mqttUserConfig.Topic, token.Error()))
 		}
-
-		// TODO: Figure out how to pass the state
-		// This poses an issue; It ain't working. The only way this works is if I were to use server.Add() to add the state, but the state is immutable.
-		c.Locals("mqttUserConfig", &mqttUserConfig)
-		c.Locals("mqttClient", mqttClient)
 
 		return c.SendString("Connected to the Json config\n")
 	}
 }
 
-// TODO: fix this method after having a possibility of passing the state.
-func PostDisconnectHandler() fiber.Handler {
+func PostDisconnectHandler(mqttClient *mqtt.Client, mqttUserConfig *MqttUserConfig) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		mqttUserConfig, ok := c.Locals("mqttUserConfig").(MqttUserConfig)
-		if !ok {
-			return c.SendString("It wasn't even connected in the first place, you fool!\n")
-		}
-
-		mqttClient := c.Locals("mqttClient").(mqtt.Client)
-
-		token := mqttClient.Unsubscribe(mqttUserConfig.Topic)
-		token.Wait()
-		if token.Error() != nil {
+		if token := (*mqttClient).Unsubscribe(mqttUserConfig.Topic); token.Wait() && token.Error() != nil {
 			return c.SendString(fmt.Sprintf("Failure at unsubscribing from topic %s\nError Message: %s\n", mqttUserConfig.Topic, token.Error()))
 		}
 
-		mqttClient.Disconnect(250)
+		(*mqttClient).Disconnect(250)
 		return c.SendString("Disconnected")
 	}
 }
@@ -81,8 +64,11 @@ type Number struct {
 func main() {
 	server := fiber.New()
 
-	server.Post("/mqtt/connect", PostConnectHandler())
-	server.Post("/mqtt/disconnect", PostDisconnectHandler())
+	var mqttUserConfig MqttUserConfig
+	var mqttClient mqtt.Client
+
+	server.Post("/mqtt/connect", PostConnectHandler(&mqttClient, &mqttUserConfig))
+	server.Post("/mqtt/disconnect", PostDisconnectHandler(&mqttClient, &mqttUserConfig))
 
 	server.Listen(":3000")
 }
