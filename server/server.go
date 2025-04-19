@@ -48,12 +48,34 @@ func PostConnectHandler(mqttClient *mqtt.Client, mqttUserConfig *MqttUserConfig)
 
 func PostDisconnectHandler(mqttClient *mqtt.Client, mqttUserConfig *MqttUserConfig) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		if mqttUserConfig.Topic == "" {
+			return c.SendString("It wasn't even connected\n")
+		}
 		if token := (*mqttClient).Unsubscribe(mqttUserConfig.Topic); token.Wait() && token.Error() != nil {
 			return c.SendString(fmt.Sprintf("Failure at unsubscribing from topic %s\nError Message: %s\n", mqttUserConfig.Topic, token.Error()))
 		}
 
 		(*mqttClient).Disconnect(250)
-		return c.SendString("Disconnected")
+		mqttUserConfig.Ip = ""
+		mqttUserConfig.ClientId = ""
+		mqttUserConfig.Topic = ""
+		return c.SendString("Disconnected\n")
+	}
+}
+
+func PostSubscribeHandler(mqttClient *mqtt.Client, mqttUserConfig *MqttUserConfig) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if token := (*mqttClient).Subscribe(mqttUserConfig.Topic, 0, nil); token.Wait() && token.Error() != nil {
+			return c.SendString(fmt.Sprintf("You fool! The topic you want to subscribe to is invalid! You utter buffoon!"))
+		}
+		return c.SendString("Subscribed\n")
+	}
+}
+
+func PostMessageHandler(mqttClient *mqtt.Client, mqttUserConfig *MqttUserConfig) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		(*mqttClient).Publish(mqttUserConfig.Topic, 0, false, c.Params("message"))
+		return nil
 	}
 }
 
@@ -64,6 +86,8 @@ func main() {
 	var mqttClient mqtt.Client
 
 	server.Post("/mqtt/connect", PostConnectHandler(&mqttClient, &mqttUserConfig))
+	server.Post("/mqtt/subscribe", PostSubscribeHandler(&mqttClient, &mqttUserConfig))
+	server.Post("/mqtt/message/:message", PostMessageHandler(&mqttClient, &mqttUserConfig))
 	server.Post("/mqtt/disconnect", PostDisconnectHandler(&mqttClient, &mqttUserConfig))
 
 	server.Listen(":3000")
