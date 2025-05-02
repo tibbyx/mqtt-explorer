@@ -78,9 +78,9 @@ The design:
 ```
 # Entry
 ```
-topic-list---+current-topic-messages-----clients------+
+topic-list---+current-topic--------------clients------+
 | main       | Currently at main         | main.c     |
-| zion       +---------------------------+ virus      |
+| zion       messages--------------------+ virus      |
 |            |                           | cogmind    |
 |            |                           | soldier    |
 |            |                           | slayer     |
