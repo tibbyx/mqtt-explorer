@@ -6,7 +6,7 @@ $ make run
 ```
 
 
-What the thing can do:
+What mqtt can do:
 
 Connect to ip:port/topic
 - listen to messages from every client
@@ -14,10 +14,20 @@ Connect to ip:port/topic
 - ... that's it.
 
 
+What mqtt cannot do:
+- Differenciate the clients
+- ...
+- Or can it? (Vsause music kicks in)
+- The user who will use will simply write the messages, but we shall append the clientId to the messages..!
+- Hah! Crazy! Insane even!
+
+
 With this basics, we can do a lot.
 - A chat system (like revolt or discord)
-How? Well we have the ID. The rest we can store into the database.
-The topics can be... like revolt/discord servers.
+- ...
+- How? Well we have the ID (In the messages).
+- We can use database to display previously entered messages in topics by ids.
+- The topics can be... like revolt/discord servers!
 
 
 The design:
