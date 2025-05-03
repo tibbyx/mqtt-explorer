@@ -10,11 +10,12 @@
 			<h2>{{TheBestest}}</h2>
 		</div>
 		<div hx-ext="ws" ws-connect="/chat">
-			<div id="msg" hx-swap-oob="beforeEnd"></div>
-			<form id="form">
-				<input name="msg">
-				<button ws-send hx-target="#msg" hx-swap-oob="beforeEnd">submit</button>
+			<div id="chat-box">
+			</div>
+			<form id="form" ws-send hx-target="#chat-box" hx-swap-oob="beforeend">
+				<input name="ChatMessage">
 			</form>
 		</div>
 	</body>
 </html>
+

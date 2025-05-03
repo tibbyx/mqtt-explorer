@@ -2,6 +2,8 @@ package main
 
 import (
 	"log"
+	"fmt"
+	"encoding/json"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/contrib/websocket"
@@ -24,6 +26,10 @@ func main() {
 func setupRoutes(app *fiber.App) {
 	setupWs(app)
 	setupIndex(app)
+}
+
+type WebSocketMessage struct {
+	ChatMessage string
 }
 
 func setupWs(app *fiber.App) {
@@ -50,8 +56,18 @@ func setupWs(app *fiber.App) {
 				break
 			}
 			log.Printf("recv: %s", msg)
+			res := WebSocketMessage{}
+			err := json.Unmarshal([]byte(msg), &res)
+			if err != nil {
+				log.Println("Big f")
+				log.Println("%s", err)
+			}
 
-			if err = c.WriteMessage(mt, msg); err != nil {
+			log.Printf("msg: %s", res.ChatMessage)
+
+			echo := fmt.Sprintf("<div id=chat-box>%s</div>", res.ChatMessage)
+
+			if err = c.WriteMessage(mt, []byte(echo)); err != nil {
 				log.Println("write:", err)
 				break
 			}
