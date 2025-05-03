@@ -1,4 +1,4 @@
-Currently there are three labs:
+Currently there are four labs:
 
 - old_server
     - gofiber as back-end and currently no frontend
@@ -9,3 +9,8 @@ Currently there are three labs:
     - go-app as both front-end and back-end
     - it builds wasm and has the html + css flexibility
     - builds to web browsers
+- 0b11
+    - back-end          : gofiber
+    - template engine   : django
+    - front-end         : htmx
+    - websocket         : yes
