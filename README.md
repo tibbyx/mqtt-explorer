@@ -14,3 +14,7 @@ Currently there are four labs:
     - template engine   : django
     - front-end         : htmx
     - websocket         : yes
+- 0b100
+    - sse
+    - I don't know how to make it work with htmx and I don't want to try React out.
+
