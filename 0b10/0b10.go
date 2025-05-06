@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/maxence-charriere/go-app/v10/pkg/app"
 	"log"
+	"fmt"
 	"net/http"
 )
 
@@ -34,6 +35,7 @@ func main() {
 		Description: "There can be only one",
 	})
 
+	fmt.Println("http://localhost:8000/")
 	// If there is an error, log it and shut down the server
 	if err := http.ListenAndServe(":8000", nil); err != nil {
 		log.Fatal(err)
