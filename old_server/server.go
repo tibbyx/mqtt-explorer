@@ -17,6 +17,10 @@ func printMqttUserConfig(mqttUserConfig *MqttUserConfig) {
 	fmt.Println("topic    : ", mqttUserConfig.Topic)
 }
 
+var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
+	fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
+}
+
 func PostConnectHandler(mqttClient *mqtt.Client, mqttUserConfig *MqttUserConfig) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var mqttOpts *mqtt.ClientOptions 
@@ -29,12 +33,13 @@ func PostConnectHandler(mqttClient *mqtt.Client, mqttUserConfig *MqttUserConfig)
 
 		// TODO: It would be nice to validate the IP before this
 
-		mqttOpts = mqtt.NewClientOptions().AddBroker(fmt.Sprintf("tcp://%s:1883", mqttUserConfig.Ip)).SetClientID(mqttUserConfig.ClientId)
+		//mqttOpts = mqtt.NewClientOptions().AddBroker(fmt.Sprintf("tcp://%s:1883", mqttUserConfig.Ip)).SetClientID(mqttUserConfig.ClientId)
+		mqttOpts = mqtt.NewClientOptions().AddBroker(fmt.Sprintf("tcp://test.mosquitto.org:1883")).SetClientID(mqttUserConfig.ClientId)
 		mqttOpts.SetKeepAlive(2 * time.Second)
 		mqttOpts.SetPingTimeout(1 * time.Second)
 
 		// TODO: Figure out how to use the handler.
-		// mqttState.mqttOpts.SetDefaultPublishHandler(<INSERT HANDLER HERE>)
+		mqttOpts.SetDefaultPublishHandler(messagePubHandler)
 
 		*mqttClient = mqtt.NewClient(mqttOpts)
 
