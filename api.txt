@@ -22,46 +22,141 @@ Terms:
 
 JSON/RPC Endpoints:
     -   <IP>:<PORT>/topic/all
-        - GET
-        - Returns all topics that the client was subscribed to
+		- The GET Method shall return a list of topics that the <CLIENT-ID> subscribed at any time.
+
+TO CLIENT JSON:
+{
+  "topics" :
+  [
+  	"main.c",
+  	"london",
+  	"linux",
+	"abolishauthority"
+  ]
+}
+
 
     -   <IP>:<PORT>/topic/subscribed
-        - The GET method *shall* return subscribed to <TOPIC>s.
+        - The GET method *shall* return currently subscribed <TOPIC>s.
 
-    -   <IP>:<PORT>/favourite/<TOPIC>
-        - POST
-        - Toggle?
-        - GET
-        - Returns if the topic is a favourite or not
+TO CLIENT JSON:
+{
+  "topics" :
+  [
+  	"main.c",
+  	"linux",
+	"abolishauthority"
+  ]
+}
 
-    -   <IP>:<PORT>/favourite
-        - GET
-        - Returns if the topic is a favourite or not
+
+    -   <IP>:<PORT>/favourites
+        - The GET Method *shall* 
+        - The POST Method *shall* 
+        - The DELETE Method *shall* 
+
+TO SERVER JSON:
+{
+  ?
+} 
+
+TO CLIENT JSON:
+{
+  "topic" :
+  [
+    "main.c",
+	"abolishauthority"
+  ]
+}
 
     -   <IP>:<PORT>/topic/<TOPIC>/subscribe
         - The POST method *shall* subscribe the client to the <TOPIC>.
 
+TO CLIENT JSON:
+{
+  ?
+}
+
     -   <IP>:<PORT>/topic/<TOPIC>/unsubscribe
         - The POST method *shall* unsubscribe the client from the given <TOPIC>.
 
+TO CLIENT JSON:
+{
+  ?
+}
+
     -   <IP>:<PORT>/topic/<TOPIC>/send-message
         - The POST method *shall* write the <MESSAGE> to the database.
+
+TO SERVER JSON:
+{
+  "message" : "Hellspawn scum!"
+}
 
     -   <IP>:<PORT>/topic/<TOPIC>/request-old-messages/<TABLE-ID>
         - The GET Method *shall* return matched to the <TOPIC> a list of <MESSAGE>s from other and self MQTT-Clients.
         - The GET Method *shall* return 404 if the <TOPIC> does not exist in the database.
 
+TO CLIENT JSON:
+{
+  {
+  	"user" : "polar",
+	"message" : "The infinity!",
+	"epoch" : 121393259
+  },
+
+  {
+  	"user" : "polar",
+	"message" : "I am the storm that is approaching!",
+	"epoch" : 121393272
+  },
+
+  {
+  	"user" : "main.c",
+	"message" : "Compiling...",
+	"epoch" : 121393300
+  }
+}
+
     -   <IP>:<PORT>/topic/<TOPIC>/request-new-messages
-        - The GET Method *shall* return matched to the <TOPIC> a list of <MESSAGE>s from other MQTT-Clients that the <USER> has not yet seen.
+        - The GET Method *shall* return matched to the <TOPIC> a list of <MESSAGE>s matched to <USER>s of other MQTT-Clients that the current <USER> has not yet seen.
         - The GET Method *shall* return 404 if the <TOPIC> does not exist in the database.
 
+TO CLIENT JSON:
+{
+  {
+  	"user" : "agent-1",
+	"message" : "The temperature now is mildly uncomfortable for the fire ants.",
+	"epoch" : 121393333
+  },
+
+  {
+  	"user" : "main.c",
+	"message" : "Who cares about the ants?",
+	"epoch" : 121393400
+  }
+}
+
     -   <IP>:<PORT>/ping-broker
-        - GET
+        - The GET Method *shall* return the status of the MQTT Connection (connected or not connected)
+
+TO CLIENT JSON:
+{
+  ?
+}
 
     -   <IP>:<PORT>/credentials
         - The POST Method *shall* be used to post a <BROKER-IP>, <CLIENT-ID> and optionally <PASSWORD> for the MQTT-Client.
         - MQTT-Client *must* have a ClientID so that the MQTT-Broker to differenciate the MQTT-Clients (probably).
         - The <CLIENT-ID> *shall also* be used to associate the messages published through the MQTT protocol with the the <USER>.
+
+TO SERVER JSON:
+{
+  "brokerip" : "127.0.0.1",
+  "port" : 1883,
+  "username" : "polar",
+  "password" : "",
+}
 
 The end functionality will resemble a chat server system where the information is not stored in a server, but rather in clients.
 This has a side effect that if one client were to disconnect, it will not receive posted messages and will not be able to update them.
