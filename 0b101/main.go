@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"github.com/eclipse/paho.mqtt.golang"
 	"time"
+	"slices"
 )
+
+const BADJSON = "I am nowt sowwy >:3. An expected! ewwow has happened. Youw weak json! iws of the wwongest fowmat thawt does nowt cowwespond tuwu the stwong awnd independent stwuct! >:P"
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
 	fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
@@ -49,6 +52,8 @@ func PostMessageHandler(mqttClient *mqtt.Client, mqttUserConfig *MqttUserConfig)
 
 type ServerState struct {
 	userCreds MqttCredentials
+	mqttClient mqtt.Client
+	subscribedTopics []string 
 }
 
 type MqttCredentials struct {
@@ -65,32 +70,31 @@ func (mc MqttCredentials) dump() {
 
 func main() {
 	server := fiber.New()
+	var serverState ServerState
 
-	/*
-	var userCreds MqttCredentials
-	var mqttClient mqtt.Client
-	*/
-
-	addRoutes(server)
+	addRoutes(server, &serverState)
 
 	server.Listen(":3000")
 }
 
-func addRoutes(server *fiber.App) {
-	server.Post("/credentials", PostCredentialsHandler())
+func addRoutes(server *fiber.App, serverState *ServerState) {
+	server.Post("/credentials", PostCredentialsHandler(serverState))
+	server.Post("/topic/subscribe", PostTopicSubscribeHandler(serverState))
+	server.Post("/topic/unsubscribe", PostTopicUnsubscribeHandler(serverState))
+	server.Get("/topic/all", GetTopicSubscribedHandler(serverState))
 	//server.Post("/mqtt/subscribe", PostSubscribeHandler(&mqttClient, &mqttUserConfig))
 	//server.Post("/mqtt/message/:message", PostMessageHandler(&mqttClient, &mqttUserConfig))
 	//server.Post("/mqtt/disconnect", PostDisconnectHandler(&mqttClient, &mqttUserConfig))
 }
 
-func PostCredentialsHandler() fiber.Handler {
+func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 
 		var userCreds MqttCredentials
 
 		if err := c.BodyParser(&userCreds); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"badJson": "I am nowt sowwy >:3. An expected! ewwow has happened. Youw weak json! iws of the wwongest fowmat thawt does nowt cowwespond tuwu the stwong awnd independent stwuct! >:P",
+				"badJson": BADJSON,
 			})
 		}
 
@@ -103,10 +107,8 @@ func PostCredentialsHandler() fiber.Handler {
 			}
 		}
 
-		//return c.SendString(fmt.Sprintf("IP:%s;Port:%s;ClientID:%s", userCreds.Ip, userCreds.Port, userCreds.ClientId))
-
+		// test.mosquitto.org
 		mqttOpts := mqtt.NewClientOptions().AddBroker(fmt.Sprintf("tcp://%s:%s", userCreds.Ip, userCreds.Port)).SetClientID(userCreds.ClientId)
-		//mqttOpts = mqtt.NewClientOptions().AddBroker(fmt.Sprintf("tcp://test.mosquitto.org:1883")).SetClientID(mqttUserConfig.ClientId)
 		mqttOpts.SetKeepAlive(2 * time.Second)
 		mqttOpts.SetPingTimeout(1 * time.Second)
 
@@ -119,6 +121,9 @@ func PostCredentialsHandler() fiber.Handler {
 				"badJson": fmt.Sprintf("Connecting to %s:%s failed\n%s", userCreds.Ip, userCreds.Port, token.Error()),
 			})
 		}
+
+		serverState.userCreds = userCreds
+		serverState.mqttClient = mqttClient
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"goodJson": fmt.Sprintf("Connecting to %s:%s succeded", userCreds.Ip, userCreds.Port),
@@ -154,4 +159,68 @@ func validateCredentials(errorMessage *string, userCreds *MqttCredentials) int {
 	}
 
 	return 0
+}
+
+type TopicsWrapper struct {
+	Topics []string
+}
+
+func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		var subscribeTopics TopicsWrapper
+
+		if err := c.BodyParser(&subscribeTopics); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"badJson": BADJSON,
+			})
+		}
+
+		var badTopics []string
+
+		for _, topic := range subscribeTopics.Topics {
+			if !slices.Contains(serverState.subscribedTopics, topic) {
+				if token := serverState.mqttClient.Subscribe(topic, 0, nil); token.Wait() && token.Error() != nil {
+					badTopics = append(badTopics, topic)
+				} else {
+					serverState.subscribedTopics = append(serverState.subscribedTopics, topic)
+				}
+			}
+		}
+
+		if len(badTopics) != 0 {
+			// TODO: The status code is meh, as the function at this point would
+			// subscribe to at least some of the requested topics.
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"badJson": "Could not subscribe to these topics",
+				"topics": badTopics,
+			})
+		}
+
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"goodJson":"Subscribed to the topics",
+		})
+	}
+}
+
+// TODO: This function is incomplete
+func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		var unsubscribeTopics TopicsWrapper
+
+		if err := c.BodyParser(&unsubscribeTopics); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"badJson": BADJSON,
+			})
+		}
+
+		return nil
+	}
+}
+
+func GetTopicSubscribedHandler(serverState *ServerState) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"topics": serverState.subscribedTopics,
+		})
+	}
 }
