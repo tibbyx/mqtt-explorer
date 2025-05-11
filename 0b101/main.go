@@ -13,12 +13,14 @@ const BADJSON = "I am nowt sowwy >:3. An expected! ewwow has happened. Youw weak
 
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
 	fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
+	// TODO: The payload and topic will be written into the database.
+	//       It also needs to store the current epoch.
 }
 
 type ServerState struct {
 	userCreds MqttCredentials
 	mqttClient mqtt.Client
-	subscribedTopics []string 
+	subscribedTopics []string // TODO: This probably has to be a struct array of a pair, a pair of topic and epoch time.
 }
 
 type MqttCredentials struct {
