@@ -62,30 +62,38 @@ TO SERVER JSON:
 
 TO CLIENT JSON:
 {
-  "topic" :
+  "topics" :
   [
     "main.c",
 	"abolishauthority"
   ]
 }
 
-    -   <IP>:<PORT>/topic/<TOPIC>/subscribe
-        - The POST method *shall* subscribe the client to the <TOPIC>.
+    -   <IP>:<PORT>/topic/subscribe
+        - The POST method *shall* subscribe the client to the <TOPIC>s that are in the json. Yes, that's an array.
 
 TO CLIENT JSON:
 {
-  ?
+  "topics":
+  [
+    "mlem/plinkUwU",
+    "mlem/plinkOwO"
+  ]
 }
 
-    -   <IP>:<PORT>/topic/<TOPIC>/unsubscribe
+    -   <IP>:<PORT>/topic/unsubscribe
         - The POST method *shall* unsubscribe the client from the given <TOPIC>.
 
 TO CLIENT JSON:
 {
-  ?
+  "topic":
+  [
+    "mlem/plinkOwO",
+    "parisisnice",
+  ]
 }
 
-    -   <IP>:<PORT>/topic/<TOPIC>/send-message
+    -   <IP>:<PORT>/topic/send-message
         - The POST method *shall* write the <MESSAGE> to the database.
 
 TO SERVER JSON:
