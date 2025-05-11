@@ -1,0 +1,176 @@
+Constants:
+<IP>        : localhost
+              127.0.0.1
+                            
+<PORT>      : 8080
+<TABLE-CAP> : 500
+                            
+Terms:                      
+<TOPIC>     : Definition:   <TOPIC> is an endpoint of the MQTT where clients can subscribe to and publish messages.
+                            There can be any topic used. The working of the Topic is handled by the MQTT-Broker.
+                            The <TOPIC> *shall* be mapped to all messages in order to sort them.
+                            
+<TABLE-ID>  : Definition:   The <TABLE-ID> *shall* be an ID, which is a number, matched to <MESSAGE>s.
+                            If the <TABLE-ID> is 0, it shall be matched from the 0*<TABLE-CAP>+1 message up to the (0+1)*<TABLE-CAP> message.
+                            If the <TABLE-ID> is 1, it shall be matched from the 1*<TABLE-CAP>+1 message up to the (1+1)*<TABLE-CAP> message.
+                            If the <TABLE-ID> is n, it shall be matched from the n*<TABLE-CAP>+1 message up to the (n+1)*<TABLE-CAP> message.
+                            
+<MESSAGE>   : Definition:   The <MESSAGE> *shall* be a string that will be transmitted through the MQTT-Protocol to
+                            MQTT-Broker.
+
+<BROKER-IP> : Definition:   The <BROKER-IP> *shall* be the IP of the MQTT-Broker that the server will connect to.
+
+JSON/RPC Endpoints:
+    -   <IP>:<PORT>/topic/all
+		- The GET Method shall return a list of topics that the <CLIENT-ID> subscribed at any time.
+
+TO CLIENT JSON:
+{
+  "topics" :
+  [
+  	"main.c",
+  	"london",
+  	"linux",
+	"abolishauthority"
+  ]
+}
+
+
+    -   <IP>:<PORT>/topic/subscribed
+        - The GET method *shall* return currently subscribed <TOPIC>s.
+
+TO CLIENT JSON:
+{
+  "topics" :
+  [
+  	"main.c",
+  	"linux",
+	"abolishauthority"
+  ]
+}
+
+
+    -   <IP>:<PORT>/favourites
+        - The GET Method *shall* 
+        - The POST Method *shall* 
+        - The DELETE Method *shall* 
+
+TO SERVER JSON:
+{
+  ?
+} 
+
+TO CLIENT JSON:
+{
+  "topics" :
+  [
+    "main.c",
+	"abolishauthority"
+  ]
+}
+
+    -   <IP>:<PORT>/topic/subscribe
+        - The POST method *shall* subscribe the client to the <TOPIC>s that are in the json. Yes, that's an array.
+
+TO CLIENT JSON:
+{
+  "topics":
+  [
+    "mlem/plinkUwU",
+    "mlem/plinkOwO"
+  ]
+}
+
+    -   <IP>:<PORT>/topic/unsubscribe
+        - The POST method *shall* unsubscribe the client from the given <TOPIC>.
+
+TO CLIENT JSON:
+{
+  "topic":
+  [
+    "mlem/plinkOwO",
+    "parisisnice",
+  ]
+}
+
+    -   <IP>:<PORT>/topic/send-message
+        - The POST method *shall* write the <MESSAGE> to the database.
+
+TO SERVER JSON:
+{
+  "message" : "Hellspawn scum!"
+}
+
+    -   <IP>:<PORT>/topic/<TOPIC>/request-old-messages/<TABLE-ID>
+        - The GET Method *shall* return matched to the <TOPIC> a list of <MESSAGE>s from other and self MQTT-Clients.
+        - The GET Method *shall* return 404 if the <TOPIC> does not exist in the database.
+
+TO CLIENT JSON:
+{
+  {
+  	"user" : "polar",
+	"message" : "The infinity!",
+	"epoch" : 121393259
+  },
+
+  {
+  	"user" : "polar",
+	"message" : "I am the storm that is approaching!",
+	"epoch" : 121393272
+  },
+
+  {
+  	"user" : "main.c",
+	"message" : "Compiling...",
+	"epoch" : 121393300
+  }
+}
+
+    -   <IP>:<PORT>/topic/<TOPIC>/request-new-messages
+        - The GET Method *shall* return matched to the <TOPIC> a list of <MESSAGE>s matched to <USER>s of other MQTT-Clients that the current <USER> has not yet seen.
+        - The GET Method *shall* return 404 if the <TOPIC> does not exist in the database.
+
+TO CLIENT JSON:
+{
+  {
+  	"user" : "agent-1",
+	"message" : "The temperature now is mildly uncomfortable for the fire ants.",
+	"epoch" : 121393333
+  },
+
+  {
+  	"user" : "main.c",
+	"message" : "Who cares about the ants?",
+	"epoch" : 121393400
+  }
+}
+
+    -   <IP>:<PORT>/ping-broker
+        - The GET Method *shall* return the status of the MQTT Connection (connected or not connected)
+
+TO CLIENT JSON:
+{
+  ?
+}
+
+    -   <IP>:<PORT>/credentials
+        - The POST Method *shall* be used to post a <BROKER-IP>, <CLIENT-ID> and optionally <PASSWORD> for the MQTT-Client.
+        - MQTT-Client *must* have a ClientID so that the MQTT-Broker to differenciate the MQTT-Clients (probably).
+        - The <CLIENT-ID> *shall also* be used to associate the messages published through the MQTT protocol with the the <USER>.
+
+TO SERVER JSON:
+{
+  "brokerip" : "127.0.0.1",
+  "port" : 1883,
+  "username" : "polar",
+  "password" : "",
+}
+
+The end functionality will resemble a chat server system where the information is not stored in a server, but rather in clients.
+This has a side effect that if one client were to disconnect, it will not receive posted messages and will not be able to update them.
+Either the client must be active at all times, or some sort of a database synchronisation mechanism must be implemented.
+
+// TODO: Figure out if it is possible for ONE client to subscribe to MULTIPLE topics.
+
+JSON Structures are to be defined // TODO: define them l8
+```
