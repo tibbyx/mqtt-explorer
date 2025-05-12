@@ -49,7 +49,8 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Post("/topic/subscribe", PostTopicSubscribeHandler(serverState))
 	server.Post("/topic/unsubscribe", PostTopicUnsubscribeHandler(serverState))
 	server.Get("/topic/subscribed", GetTopicSubscribedHandler(serverState))
-	server.Post("/topic/send-message", PostMessageHandler(serverState))
+	server.Post("/topic/send-message", PostTopicSendMessageHandler(serverState))
+	server.Get("/ping", PostPingHandler(serverState));
 }
 
 func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
@@ -249,7 +250,7 @@ type MessageWrapper struct {
 	Message string
 }
 
-func PostMessageHandler(serverState *ServerState) fiber.Handler {
+func PostTopicSendMessageHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if serverState.userCreds.Ip == "" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
@@ -273,5 +274,25 @@ func PostMessageHandler(serverState *ServerState) fiber.Handler {
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"goodJson":"Message posted",
 		})
+	}
+}
+
+func PostPingHandler(serverState *ServerState) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if serverState.userCreds.Ip == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				// TODO: Explain the message a bit more
+				"401": "You fool!",
+			})
+		}
+
+		if token := serverState.mqttClient.Publish("ping", 0, false, '0'); token.Wait() && token.Error() != nil {
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+				"badMqtt" : "Big f!",
+			})
+		}
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+				"goodMqtt" : "pong",
+			})
 	}
 }
