@@ -1,5 +1,5 @@
 # server
-server/server
+server/main
 
 # main
 main/main.go~
