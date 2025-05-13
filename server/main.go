@@ -9,32 +9,89 @@ import (
 	"strings"
 )
 
+// # Author
+// - Polariusz
 const BADJSON = "I am nowt sowwy >:3. An expected! ewwow has happened. Youw weak json! iws of the wwongest fowmat thawt does nowt cowwespond tuwu the stwong awnd independent stwuct! >:P"
 
+// # Author
+// - Polariusz
 var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
 	fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
 	// TODO: The payload and topic will be written into the database.
 	//       It also needs to store the current epoch.
 }
 
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-13     | Polariusz | Created |
+//
+// # Description
+// - This method shall build a message containing the Client-ID and the Message that the messagePubHandler will be able to then differentiate and write into the database accordingly.
+//
+// # Author
+// - Polariusz
+func messageBuilder(creds MqttCredentials, message string) string {
+	// TODO: We need to think of a structure for categorising messages with the clientIds (Usernames).
+	return message
+}
+
+// | Date of change | By        | Comment       |
+// +----------------+-----------+---------------+
+// |                | Polariusz | Created       |
+// | 2025-05-13     | Polariusz | Documentation |
+//
+// # Description
+//
+// - The structure allows for all Handlers to have a common state.
+//   - In this project this is fine as only one client shall have one server.
+//     - The client functions as the frontend gui for the go-server.
+//
+// # Used in
+// - All function handlers.
+//
+// # Author
+// - Polariusz
 type ServerState struct {
 	userCreds MqttCredentials
 	mqttClient mqtt.Client
 	subscribedTopics []string // TODO: This probably has to be a struct array of a pair, a pair of topic and epoch time.
 }
 
+// | Date of change | By        | Comment       |
+// +----------------+-----------+---------------+
+// |                | Polariusz | Created       |
+// | 2025-05-13     | Polariusz | Documentation |
+//
+// # Structure:
+// - {"Ip":<I>,"Port":"<P>","ClientId":<C>}
+//   - <I>: The IP of the MQTT-Broker.
+//   - <P>: The Port that the MQTT-Broker opened for the protocol.
+//   - <C>: Client ID that functions as an username. It makes the users distinct.
+//
+// # Used in
+// - struct ServerState
+//   - Therefore it is in scope in all function handlers.
+// - PostCredentialsHandler()
+// - validateCredentials()
+//
+// # Author
+// - Polariusz
 type MqttCredentials struct {
 	Ip string
-	Port string
+	Port string // TODO: It would be probably nice to store it as a numeric.
 	ClientId string
 }
 
+// # Author
+// - Polariusz
 func (mc MqttCredentials) dump() {
-	fmt.Println("ip       : ", mc.Ip)
-	fmt.Println("port     : ", mc.Port)
-	fmt.Println("clientId : ", mc.ClientId)
+	fmt.Printf("ip       : %s", mc.Ip)
+	fmt.Printf("port     : %s", mc.Port)
+	fmt.Printf("clientId : %s", mc.ClientId)
 }
 
+// # Author
+// - Polariusz
 func main() {
 	server := fiber.New()
 	var serverState ServerState
@@ -44,15 +101,58 @@ func main() {
 	server.Listen(":3000")
 }
 
+// | Date of change | By        | Comment       |
+// +----------------+-----------+---------------+
+// |                | Polariusz | Created       |
+// | 2025-05-13     | Polariusz | Documentation |
+//
+// # Method-Type
+// - Routing
+//
+// # Description
+// - The method shall assign URLs to function handlers.
+//
+// # Author
+// - Polariusz
 func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Post("/credentials", PostCredentialsHandler(serverState))
 	server.Post("/topic/subscribe", PostTopicSubscribeHandler(serverState))
 	server.Post("/topic/unsubscribe", PostTopicUnsubscribeHandler(serverState))
 	server.Get("/topic/subscribed", GetTopicSubscribedHandler(serverState))
 	server.Post("/topic/send-message", PostTopicSendMessageHandler(serverState))
-	server.Get("/ping", PostPingHandler(serverState));
+	server.Get("/ping", GetPingHandler(serverState));
 }
 
+// | Date of change | By        | Comment       |
+// +----------------+-----------+---------------+
+// |                | Polariusz | Created       |
+// | 2025-05-13     | Polariusz | Documentation |
+//
+// # Method-Type
+// - Handler
+//
+// # Description
+// - The method shall be a handler that allows to authenticate the user to the MQTT-Broker as the protocol must have a ClientId. 
+// - The method shall accept a jsonified structure that follows the struct MqttCredentials.
+// - The method shall return a 200 (Ok) if credentials are valid and the connection with the MQTT-Broker was estabilished.
+// - The method shall return a 400 (Bad Request) if the data from the client does not match that one of the struct MqttCredentials.
+// - The method shall return a 404 (Service Unavailable) if the connection to the MQTT-Broker failed.
+//
+// # Usage
+// - Call declared by the routing method addRoutes() URL with the POST-Method.
+// - The data must have a json structure that matches the struct MqttCredentials.
+//
+// # Returns
+// - 200 (Ok): JSON
+//   - {"goodJson":"Connecting to `Ip`:`Port` succeded"}
+// - 400 (Bad Request): JSON
+//   - {"badJson":`const BADJSON`}
+//   - {"badJson":`errorMessage`}
+// - 404 (Not Found): JSON
+//   - {"badMqtt":"Connecting to `Ip`:`Port` failed"}
+//
+// # Author
+// - Polariusz
 func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 
@@ -83,7 +183,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 		mqttClient := mqtt.NewClient(mqttOpts)
 
 		if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"badJson": fmt.Sprintf("Connecting to %s:%s failed\n%s", userCreds.Ip, userCreds.Port, token.Error()),
 			})
 		}
@@ -97,40 +197,113 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 	}
 }
 
-/*
- * TODO: The validation need to be improved. Right now it only checks if the argument userCreds has empty strings.
- * Returns:
- * - 0: No error
- * - 1: Ip was deemed incorrect
- * - 2: Port was deemed incorrect
- * - 3: ClientId was deemed incorrect
-*/
+// | Date of change | By        | Comment       |
+// +----------------+-----------+---------------+
+// |                | Polariusz | Created       |
+// | 2025-05-13     | Polariusz | Documentation |
+//
+// # Method-Type
+// - Validator
+//
+// # Description
+// - The method shall validate the argument `userCreds *MqttCredentials`.
+//   - TODO: The validation need to be improved. Right now it only checks if the argument userCreds has empty strings.
+//
+// # Usage
+// - Call the method with argument errorMessage if you want to know a more detailed error message and the userCreds that the user has inputted when logging in.
+// - The method provides an int that defines what has happened.
+// - The method's argument `errorMessage *string` provides a more detailed message on what went wrong with not valid variable of the argument `userCreds`.
+// - If nessesary, The first argument can be simply ignored. 
+//
+// # Returns
+// - 0: No error
+// - 1: Ip was deemed incorrect
+// - 2: Port was deemed incorrect
+// - 3: ClientId was deemed incorrect
+//
+// # Author
+// - Polariusz
 func validateCredentials(errorMessage *string, userCreds *MqttCredentials) int {
 	// VALIDATE IP
 	if userCreds.Ip == "" {
-		*errorMessage = "IP is incomprehensible"
+		if errorMessage != nil {
+			*errorMessage = "IP is incomprehensible"
+		}
 		return 1
 	}
 
 	// VALIDATE PORT 
 	if userCreds.Port == "" {
-		*errorMessage = "PORT is incomprehensible"
+		if errorMessage != nil {
+			*errorMessage = "PORT is incomprehensible"
+		}
 		return 2
 	}
 
 	// VALIDATE CLIENTID
 	if userCreds.ClientId == "" {
-		*errorMessage = "CLIENT-ID is incomprehensible"
+		if errorMessage != nil {
+			*errorMessage = "CLIENT-ID is incomprehensible"
+		}
 		return 3
 	}
 
 	return 0
 }
 
+// | Date of change | By        | Comment       |
+// +----------------+-----------+---------------+
+// |                | Polariusz | Created       |
+// | 2025-05-13     | Polariusz | Documentation |
+//
+// # Structure:
+// - {"Topics":<T>}
+//   - <T>: String array of topics
+//
+// # Used in
+// - PostTopicSubscribeHandler()
+// - PostTopicUnsubscribeHandler()
+//
+// # Author
+// - Polariusz
 type TopicsWrapper struct {
 	Topics []string
 }
 
+// | Date of change | By        | Comment       |
+// +----------------+-----------+---------------+
+// |                | Polariusz | Created       |
+// | 2025-05-13     | Polariusz | Documentation |
+//
+// # Method-Type
+// - Handler
+//
+// # Description
+// - The method shall be a handler that allows to subscribe the MQTT-Broker's topics.
+// - The method shall accept a jsonified structure that follows the struct TopicsWrapper.
+// - The method shall return a 200 (Ok) if all requested topics were subscribed.
+// - The method shall return a 400 (Bad Request) if at least one topic was not subscribed.
+//   - The reason might be because of some weird utf-8 error.
+//   - TODO: the 400 might be changed.
+// - The method shall return a 400 (Bad Request) if the data from the client does not match that one fo the struct TopicsWrapper.
+//
+// # Usage
+//
+// - Call declared by the routing method addRoutes() URL with the POST-Method.
+// - The data must have a json structure that matches the struct TopicsWrapper.
+//
+// # Returns
+// - 200 (Ok): JSON
+//   - {"goodJson":"Subscribed to requested topics"}
+// - 400 (Bad Request): JSON
+//   - {"badJson":`const BADJSON`}
+// - 400 (Bad Request): JSON
+//   - {"badJson":"Could not subscribe to these topics","topics":`badTopics`}
+// - 401 (Unauthorized): JSON
+//   - {"401":"You fool!"}
+//
+// # Author
+// - Polariusz
 func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if serverState.userCreds.Ip == "" {
@@ -172,11 +345,44 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 		}
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"goodJson":"Subscribed to the topics",
+			"goodJson": "Subscribed to requested topics",
 		})
 	}
 }
 
+// | Date of change | By        | Comment       |
+// +----------------+-----------+---------------+
+// |                | Polariusz | Created       |
+// | 2025-05-13     | Polariusz | Documentation |
+//
+// # Method-Type
+// - Handler
+//
+// # Description
+// - The method shall be a handler that allows to unsubscribe from subscribed topics.
+// - The method shall accept a jsonified structure that follows the struct TopicsWrapper.
+// - The method shall return a 200 (Ok) if all the topics from the converted to type TopicsWrapper have been successfully unsubscribed.
+// - The method shall return a 400 (BadRequest) if at least one topic could not be unsubscribed from.
+//   - The reason might be because of the topic being not even subscribed or some weird utf-8 error.
+//   - TODO: the 400 might be changed.
+// - The method shall return a 400 (Bad Request) if the data from the client does not match that one fo the struct TopicsWrapper.
+//
+// # Usage
+//
+// - Call declared by the routing method addRoutes() URL with the POST-Method.
+// - The data must have a json structure that matches the struct TopicsWrapper.
+//
+// # Returns
+// - 200 (Ok): JSON
+//   - {"goodJson":"Unsubscribed from requested"}
+// - 400 (Bad Request): JSON
+//   - {"badJson":`const BADJSON`}
+//   - {"badJson":"Some topics were not even subscribed","badTopics":badTopics,"`unsubscribedTopics`":`goodTopics`}
+// - 401 (Unauthorized): JSON
+//   - {"401":"You fool!"}
+//
+// # Author
+// - Polariusz
 func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if serverState.userCreds.Ip == "" {
@@ -218,18 +424,42 @@ func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 			// TODO: The status code is meh, as the function at this point would
 			// subscribe to at least some of the requested topics.
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"badJson":"Some topics were not even subscribed",
-				"badTopics":badTopics,
-				"unsubscribedTopics":goodTopics,
+				"badJson": "Some topics were not even subscribed",
+				"badTopics": badTopics,
+				"unsubscribedTopics": goodTopics,
 			})
 		}
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"goodJson":"Unsubscribed from all",
+			"goodJson": "Unsubscribed from requested",
 		})
 	}
 }
 
+// | Date of change | By        | Comment       |
+// +----------------+-----------+---------------+
+// |                | Polariusz | Created       |
+// | 2025-05-13     | Polariusz | Documentation |
+//
+// # Method-Type
+// - Handler
+//
+// # Description
+// - The method shall be a handler that allows to get a list of subscribed topics. These topics will be strings or simply string array.
+// - The method shall return a 200 (Ok) with the subscribed topics.
+//
+// # Usage
+// - Call declared by the routing method addRoutes() URL with the GET-Method.
+//
+// # Returns
+// - 200 (Ok): JSON
+//   - {"topics":`serverState.subscribedTopics`}
+// - 401 (Unauthorized): JSON
+//   - The go server was never connected to the MQTT-Broker.
+//   - {"401":"You fool!"}
+//
+// # Author
+// - Polariusz
 func GetTopicSubscribedHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if serverState.userCreds.Ip == "" {
@@ -245,11 +475,54 @@ func GetTopicSubscribedHandler(serverState *ServerState) fiber.Handler {
 	}
 }
 
+// | Date of change | By        | Comment       |
+// +----------------+-----------+---------------+
+// |                | Polariusz | Created       |
+// | 2025-05-13     | Polariusz | Documentation |
+//
+// # Structure:
+// - {"Topic":<T>,"Message":"<M>"}
+//   - <T>: Topic
+//   - <M>: Message
+//
+// # Used in
+// - PostTopicSendMessageHandler()
+//
+// # Author
+// - Polariusz
 type MessageWrapper struct {
-	Topic string
+	Topic string // TODO: This could be converted to a string array if you wish for the publich messages method to send the same message to multiple topics.
 	Message string
 }
 
+// | Date of change | By        | Comment       |
+// +----------------+-----------+---------------+
+// |                | Polariusz | Created       |
+// | 2025-05-13     | Polariusz | Documentation |
+//
+// # Method-Type
+// - Handler
+//
+// # Description
+// - The method shall be a handler that allows to send messages to the MQTT-Broker.
+// - The method shall accept a jsonified structure that follows the struct MessageWrapper.
+// - The method shall return a 200 (Ok) if the go-server publishes a message.
+// - The method shall return a 400 (Bad Request) if the data from the client does not match that one fo the struct MessageWrapper.
+//
+// # Usage
+// - Call declared by the routing method addRoutes() URL with the POST-Method.
+// - The data must have a json structure that matches the struct MessageWrapper.
+//
+// # Returns
+// - 200 (Ok): JSON
+//   - {"goodJson":"Message posted"}
+// - 400 (Bad Request): JSON
+//   - {"badJson":`const BADJSON`}
+// - 401 (Unauthorised): JSON
+//   - {"401":"You fool!"}
+//
+// # Author
+// - Polariusz
 func PostTopicSendMessageHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if serverState.userCreds.Ip == "" {
@@ -269,15 +542,46 @@ func PostTopicSendMessageHandler(serverState *ServerState) fiber.Handler {
 
 		// TODO: Validate topic and message!
 
-		serverState.mqttClient.Publish(messageWrapper.Topic, 0, false, messageWrapper.Message)
+		// TODO: This can be changed to check if the MQTT-Broker responds! Publish() method returns a token, and the token has method Wait() that waits for the respose and Error() that has either nil or an actual error.
+		serverState.mqttClient.Publish(messageWrapper.Topic, 0, false, messageBuilder(serverState.userCreds, messageWrapper.Message))
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"goodJson":"Message posted",
+			"goodJson": "Message posted",
 		})
 	}
 }
 
-func PostPingHandler(serverState *ServerState) fiber.Handler {
+// | Date of change | By        | Comment       |
+// +----------------+-----------+---------------+
+// |                | Polariusz | Created       |
+// | 2025-05-13     | Polariusz | Documentation |
+//
+// # Method-Type
+// - Handler
+//
+// # Description
+// - The method shall be a handler that allows to check if the go-server is connected to the MQTT-Broker.
+// - The method shall ignore any data being sent to the server, be it a json or any byte array.
+// - The method shall return 200 (Ok) if the go-server is connected to the MQTT-Broker
+// - The method shall return 501 (Service Unavailable) if the MQTT-Broker does not respond back.
+//
+// # Usage
+// - Call declared by the routing method addRoutes() URL with the GET-Method.
+//
+// # Returns
+// - 200 (Ok): JSON
+//   - MQTT-Broker responded, signifying that the connection to the Broker exists.
+//   - {"goodMqtt":"pong"}
+// - 401 (Unauthorized): JSON
+//   - The go server was never connected to the MQTT-Broker.
+//   - {"401":"You fool!"}
+// - 503 (Service Unavailable): JSON
+//   - The connection to the MQTT-Broker was severed.
+//   - {"badMqtt":"Big f!"}
+//
+// # Author
+// - Polariusz
+func GetPingHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if serverState.userCreds.Ip == "" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
@@ -288,11 +592,11 @@ func PostPingHandler(serverState *ServerState) fiber.Handler {
 
 		if token := serverState.mqttClient.Publish("ping", 0, false, '0'); token.Wait() && token.Error() != nil {
 			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
-				"badMqtt" : "Big f!",
+				"badMqtt": "Big f!",
 			})
 		}
-			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
-				"goodMqtt" : "pong",
+			return c.Status(fiber.StatusOK).JSON(fiber.Map{
+				"goodMqtt": "pong",
 			})
 	}
 }
