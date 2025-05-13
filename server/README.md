@@ -211,7 +211,6 @@ _There is no need for anything to send._
 
 ### To send a message:
 
-curl --request POST --header "Content-Type: application/json" --data '{"Topics" : ["<TOPIC-1>", "<TOPIC-2>", "<TOPIC-N>"]}' localhost:3000/topic/unsubscribe
 ```bash
 curl --request POST --header "Content-Type: application/json" --data '{"Topic" : "<TOPIC>", "Message" : "<MESSAGE>"}' localhost:3000/topic/send-message
 ```
@@ -234,5 +233,35 @@ curl --request POST --header "Content-Type: application/json" --data '{"Topic" :
 ```javascript
 {
   "goodJson" : "Message posted"
+}
+```
+
+### To check if the go server is still connected to the MQTT-Broker:
+
+```bash
+curl localhost:3000/ping
+```
+
+#### Or in other words, you need to GET into localhost:3000/ping
+_There is no need for anything to send._
+
+#### If the client has not log in with the credentials, the server will return a 401 (Unauthorized) with a JSON:
+```javascript
+{
+  "401" : "You fool!"
+}
+```
+
+#### If the go server does not retrieve a response from the MQTT-Broker, it will return a 503 (Service Unavailable) with a JSON:
+```javascript
+{
+  "badMqtt" : "Big f!"
+}
+```
+
+#### If everything went well, the server will return a 200 (OK) with a JSON:
+```javascript
+{
+  "goodMqtt" : "pong"
 }
 ```
