@@ -1,3 +1,7 @@
+# server
+server/main
+
+# main
 main/main.go~
 main/main
 
@@ -65,4 +69,3 @@ storybook-static/
 
 # Optional: local backend mock
 mocks/
-
