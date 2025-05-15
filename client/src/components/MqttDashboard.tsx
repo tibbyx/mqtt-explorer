@@ -1,6 +1,7 @@
 import {Header} from "@/components/Header.tsx";
 import TopicPanel from "@/components/topic/TopicPanel.tsx";
 import {MessagePanel} from "@/components/message/MessagePanel.tsx";
+import {ConnectionPanel} from "@/components/connection/ConnectionPanel.tsx";
 import type {Topic} from "@/lib/types.ts";
 import {useMqttWebSocket} from "@/hooks/use-mqtt-websocket.tsx";
 import {useToast} from "../hooks/use-toast"
@@ -9,6 +10,7 @@ import {useState} from "react";
 function MqttDashboard() {
     const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null)
     const [searchQuery, setSearchQuery] = useState("")
+    const [isConnected, setIsConnected] = useState(false);
     const {toast} = useToast()
     const {
         messages,
@@ -55,6 +57,9 @@ function MqttDashboard() {
         setSelectedTopic(topic)
     }
 
+    const handleToggleConnect = () => {
+        setIsConnected((prev) => !prev);
+    };
     // Handle topic unsubscription
     const handleUnsubscribe = (topicId: string) => {
         unsubscribeTopic(topicId)
@@ -85,14 +90,27 @@ function MqttDashboard() {
                     onRenameTopic={renameTopic}
                     onSubscribe={handleSubscribe}
                     onUnsubscribe={handleUnsubscribe}
+                    isConnected={isConnected}
+                    onToggleConnect={handleToggleConnect}
                 />
-                <MessagePanel
-                    topic={selectedTopic}
-                    messages={selectedTopic ? messages.filter((m) => m.topic === selectedTopic.name) : []}
-                    onPublish={publishMessage}
-                    onSubscribe={handleSubscribe}
-                    onUnsubscribe={handleUnsubscribe}
-                />
+                {isConnected ? (
+                    selectedTopic ? (
+                        <MessagePanel
+                            topic={selectedTopic}
+                            messages={messages.filter((m) => m.topic === selectedTopic.name)}
+                            onPublish={publishMessage}
+                            onSubscribe={handleSubscribe}
+                            onUnsubscribe={handleUnsubscribe}
+                        />
+                    ) : (
+                        <div className="flex-1 flex items-center justify-center text-gray-500">
+                            <p>Select a topic to view messages</p>
+                        </div>
+                    )
+                ) : (
+                    <ConnectionPanel />
+                )}
+
             </div>
         </div>
     )

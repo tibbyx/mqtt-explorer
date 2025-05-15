@@ -5,6 +5,7 @@ import {Button} from "@/components/ui/button.tsx";
 import {MessageSquare, Plus} from "lucide-react";
 import {ScrollArea} from "../ui/scroll-area";
 import type {Topic} from "@/lib/types.ts";
+import { ChevronDown } from "lucide-react";
 
 interface TopicPanelProps {
     topics: Topic[];
@@ -15,6 +16,8 @@ interface TopicPanelProps {
     onRenameTopic: (id: string, newName: string) => void;
     onSubscribe: (id: string) => void;
     onUnsubscribe: (id: string) => void;
+    onToggleConnect: () => void;
+    isConnected: boolean;
 }
 
 export default function TopicPanel({
@@ -24,6 +27,8 @@ export default function TopicPanel({
                                        onCreateTopic,
                                        onDeleteTopic,
                                        onRenameTopic,
+                                       onToggleConnect,
+                                       isConnected,
                                    }: TopicPanelProps) {
     const [isCreating, setIsCreating] = useState(false);
     const [newTopicName, setNewTopicName] = useState("");
@@ -31,7 +36,6 @@ export default function TopicPanel({
     const [editingName, setEditingName] = useState("");
     const [localTopics, setLocalTopics] = useState<Topic[]>([]);
     const [showTopics, setShowTopics] = useState(false);
-    const [connected, setConnected] = useState(false);
 
     useEffect(() => {
         setLocalTopics(topics);
@@ -75,46 +79,46 @@ export default function TopicPanel({
                 </h2>
                 <Button
                     size="sm"
-                    onClick={() => {
-                        if (connected) {
-                            // Disconnect handler hier
-                            console.log("Disconnect clicked");
-                            setConnected(false);
-                        } else {
-                            // Connect handler hier
-                            console.log("Connect clicked");
-                            setConnected(true);
-                        }
-                    }}
+                    onClick={onToggleConnect}
                     className="bg-[#7a62f6] hover:bg-[#6952e3] text-white rounded-full"
                 >
-                    {connected ? "Disconnect" : "Connect"}
+                    {isConnected ? "Disconnect" : "Connect"}
                 </Button>
             </div>
 
-            <div
-                className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 transition"
-                onClick={() => setShowTopics(prev => !prev)}
-            >
-                <h2 className="font-semibold text-gray-700 dark:text-gray-200">
-                    Topics
-                </h2>
-                <Button
-                    size="sm"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        setIsCreating(true);
-                        setNewTopicName("");
-                    }}
-                    className="bg-[#7a62f6] hover:bg-[#6952e3] text-white rounded-full"
+            {isConnected && (
+                <div
+                    className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+                    onClick={() => setShowTopics(prev => !prev)}
                 >
-                    <Plus className="h-4 w-4 mr-1"/>
-                    New Topic
-                </Button>
-            </div>
+                    <h2 className="font-semibold text-gray-700 dark:text-gray-200">
+                        Topics
+                    </h2>
+
+                    {!showTopics && (
+                        <ChevronDown className="w-4 h-4 ml-1" />
+                    )}
+
+                    {showTopics && (
+                        <Button
+                            size="sm"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setIsCreating(true);
+                                setNewTopicName("");
+                            }}
+                            className="bg-[#7a62f6] hover:bg-[#6952e3] text-white rounded-full"
+                        >
+
+                            <Plus className="h-4 w-4 mr-1"/>
+                            New Topic
+                        </Button>
+                    )}
+                </div>
+            )}
 
 
-            {showTopics && (
+            {isConnected && showTopics && (
                 <>
                     {isCreating && (
                         <CreateTopicForm
