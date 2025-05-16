@@ -12,7 +12,7 @@ export function MessageItem({message}: { message: Message }) {
 
     return (
         <div
-            className="p-4 border-b bg-gray-50 dark:bg-gray-900/50 hover:bg-white dark:hover:bg-gray-950 transition-colors">
+            className="p-4 border-b bg-gray-50 dark:bg-gray-900 hover:bg-white dark:hover:bg-gray-800 transition-colors">
             <div className="flex items-start justify-between mb-2">
                 <Badge
                     variant="outline"
