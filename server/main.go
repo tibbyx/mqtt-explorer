@@ -16,14 +16,6 @@ import (
 // - Polariusz
 const BADJSON = "I am nowt sowwy >:3. An expected! ewwow has happened. Youw weak json! iws of the wwongest fowmat thawt does nowt cowwespond tuwu the stwong awnd independent stwuct! >:P"
 
-// # Author
-// - Polariusz
-var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
-	fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
-	// TODO: The payload and topic will be written into the database.
-	//       It also needs to store the current epoch.
-}
-
 // | Date of change | By        | Comment |
 // +----------------+-----------+---------+
 // | 2025-05-13     | Polariusz | Created |
@@ -58,6 +50,7 @@ type ServerState struct {
 	userCreds MqttCredentials
 	mqttClient mqtt.Client
 	subscribedTopics []string // TODO: This probably has to be a struct array of a pair, a pair of topic and epoch time.
+	receivedMessages map[string][]string
 }
 
 // | Date of change | By        | Comment       |
@@ -98,9 +91,12 @@ func (mc MqttCredentials) dump() {
 func main() {
 	server := fiber.New()
 	var serverState ServerState
+	serverState.receivedMessages = make(map[string][]string)
 
 	addRoutes(server, &serverState)
 
+	// need to build ui via 'npm run build' in client first
+	// server.Static("/", "../client/dist")
 	server.Listen(":3000")
 }
 
@@ -123,6 +119,7 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Post("/topic/unsubscribe", PostTopicUnsubscribeHandler(serverState))
 	server.Get("/topic/subscribed", GetTopicSubscribedHandler(serverState))
 	server.Post("/topic/send-message", PostTopicSendMessageHandler(serverState))
+	server.Get("/topic/messages", GetTopicMessagesHandler(serverState))
 	server.Get("/ping", GetPingHandler(serverState))
 	server.Post("/write", writeStuff())
 	server.Get("/sse", SseHandler())
@@ -183,7 +180,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 		mqttOpts.SetKeepAlive(2 * time.Second)
 		mqttOpts.SetPingTimeout(1 * time.Second)
 
-		mqttOpts.SetDefaultPublishHandler(messagePubHandler)
+		mqttOpts.SetDefaultPublishHandler(createMessageHandler(serverState))
 
 		mqttClient := mqtt.NewClient(mqttOpts)
 
@@ -606,6 +603,8 @@ func GetPingHandler(serverState *ServerState) fiber.Handler {
 	}
 }
 
+// TODO: I've written this to play around with SSE a bit more. This doesn't do anything with the mqtt part.
+//       It simply needs to be recycled for a way of the client of getting new messages.
 func writeStuff() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var messageWrapper MessageWrapper
@@ -682,5 +681,83 @@ func SseHandler() fiber.Handler {
 			}
 		}))
 		return nil
+	}
+}
+
+// | Date of change | By     | Comment                 |
+// +----------------+--------+-------------------------+
+// | 2025-05-14     | Tibbyx | Created & Documentation |
+//
+// # Method-Type
+// - MQTT Handler Factory
+//
+// # Description
+// - The method shall create and return an MQTT message handler.
+// - The handler processes incoming MQTT messages from subscribed topics.
+// - The payloads are stored in the in-memory map receivedMessages within the ServerState.
+// - The topic string is used as key, and messages are appended as values (string slices).
+//
+// # Usage
+// - Used in PostCredentialsHandler() to assign the MQTT client’s default message handler.
+// - Requires a reference to ServerState to access the receivedMessages map.
+//
+// # Returns
+// - mqtt.MessageHandler: A function that handles and stores MQTT messages.
+//
+// # Author
+// - Tibbyx
+func createMessageHandler(serverState *ServerState) mqtt.MessageHandler {
+	return func(client mqtt.Client, msg mqtt.Message) {
+		topic := msg.Topic()
+		payload := string(msg.Payload())
+
+		fmt.Printf("Received message: %s from topic: %s\n", payload, topic)
+
+		serverState.receivedMessages[topic] = append(serverState.receivedMessages[topic], payload)
+	}
+}
+
+// | Date of change | By     | Comment                 |
+// +----------------+--------+-------------------------+
+// | 2025-05-14     | Tibbyx | Created & Documentation |
+//
+// # Method-Type
+// - Handler
+//
+// # Description
+// - The method shall be a handler that returns all stored messages for a specific topic.
+// - The messages must have previously been received through an active MQTT subscription.
+// - The topic is provided as a query parameter.
+//
+// # Usage
+// - Call declared by the routing method addRoutes() URL with the GET-Method.
+// - URL must include ?topic=<topic-name>
+//
+// # Returns
+// - 200 (Ok): JSON
+//   - {"topic": "<topic-name>", "messages": ["msg1", "msg2", ...]}
+// - 400 (Bad Request): JSON
+//   - {"error": "Missing topic query parameter"}
+//
+// # Author
+// - Tibbyx
+func GetTopicMessagesHandler(serverState *ServerState) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		topic := c.Query("topic")
+		if topic == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Missing topic query parameter",
+			})
+		}
+
+		messages, ok := serverState.receivedMessages[topic]
+		if !ok {
+			messages = []string{}
+		}
+
+		return c.JSON(fiber.Map{
+			"topic": topic,
+			"messages": messages,
+		})
 	}
 }
