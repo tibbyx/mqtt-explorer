@@ -19,12 +19,11 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 	fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
 	// TODO: The payload and topic will be written into the database.
 	//       It also needs to store the current epoch.
-	now := time.Now().Unix()
-
-    err := SaveMessageToDB(msg.Topic(), string(msg.Payload()), now)
-	if err != nil {
-		fmt.Println("Failed to save message to DB:", err)
-	}
+	db := &Database{}
+    	if err := db.initDatabase(); err != nil {
+    		fmt.Println("DB init error:", err)
+    		return
+    	}
 }
 
 // | Date of change | By        | Comment |
@@ -107,7 +106,8 @@ func (mc MqttCredentials) dump() {
 // # Author
 // - Polarius
 func main() {
-	if err := InitDatabase(); err != nil {
+     db := &Database{}
+	if err := db.initDatabase(); err != nil {
     	fmt.Printf("Warning: Database init issue (ignored): %s\n", err)
     }
 

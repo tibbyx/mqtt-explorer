@@ -10,7 +10,7 @@ type Database struct {
 }
 
 
-func (d *Database) InitDatabase() error {
+func (d *Database) initDatabase() error {
 	var err error
 	d.db, err = sql.Open("sqlite3", "./mqtt.db")
 	if err != nil {
@@ -30,9 +30,8 @@ func (d *Database) InitDatabase() error {
     return err
 }
 
-func (d *Database) SaveClientToDB(adresse string, port int, clientid string) error {
-    _, err := d.db.Exec("INSERT INTO clients (adresse, port, clientId) VALUES (?, ?, ?)", adresse, port, clientId)
-    return err
-}
 
+func (d *Database) saveMessageToDB(adresse string, port int, clientId string) error {
+	_, err := d.db.Exec("INSERT INTO clients (adresse, port, clientId) VALUES (?, ?, ?)", adresse, port, clientId)
+	return err
 }
