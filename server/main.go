@@ -98,19 +98,18 @@ func (mc MqttCredentials) dump() {
 
 // | Date of change | By        | Comment |
 // +----------------+-----------+---------+
-// | 2025-05-16     | PQ        | Created |
+// | 2025.05-13     | Polarius  | Created |
+// | 2025-05-16     | PQ        | Added   |
 //
 // # Description
-// - Inicjalizacja bazy
+// - added the call of InitDatabase() function)
 //
 // # Author
-// - PQ
-
-//important um zu starten            go run *.go
+// - Polarius
 func main() {
 	if err := InitDatabase(); err != nil {
-		panic(fmt.Sprintf("Database init failed: %s", err))
-	}
+    	fmt.Printf("Warning: Database init issue (ignored): %s\n", err)
+    }
 
 	server := fiber.New()
 	var serverState ServerState

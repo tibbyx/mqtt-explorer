@@ -5,28 +5,34 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var db *sql.DB
+type Database struct {
+	db *sql.DB
+}
 
-func InitDatabase() error {
+
+func (d *Database) InitDatabase() error {
 	var err error
-	db, err = sql.Open("sqlite3", "./mqtt.db")
+	d.db, err = sql.Open("sqlite3", "./mqtt.db")
 	if err != nil {
 		return err
 	}
 
 	createTable := `
-	CREATE TABLE IF NOT EXISTS messages (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		topic TEXT NOT NULL,
-		payload TEXT NOT NULL,
-		timestamp INTEGER NOT NULL
-	);`
+    CREATE TABLE IF NOT EXISTS clients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        adresse TEXT NOT NULL,
+        port INTEGER NOT NULL,
+        clientId TEXT NOT NULL
+    );`
 
-	_, err = db.Exec(createTable)
-	return err
+
+    _, err = d.db.Exec(createTable)
+    return err
 }
 
-func SaveMessageToDB(topic string, payload string, timestamp int64) error {
-	_, err := db.Exec("INSERT INTO messages (topic, payload, timestamp) VALUES (?, ?, ?)", topic, payload, timestamp)
-	return err
+func (d *Database) SaveClientToDB(adresse string, port int, clientid string) error {
+    _, err := d.db.Exec("INSERT INTO clients (adresse, port, clientId) VALUES (?, ?, ?)", adresse, port, clientId)
+    return err
+}
+
 }
