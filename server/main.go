@@ -19,6 +19,12 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 	fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
 	// TODO: The payload and topic will be written into the database.
 	//       It also needs to store the current epoch.
+	now := time.Now().Unix()
+
+    err := SaveMessageToDB(msg.Topic(), string(msg.Payload()), now)
+	if err != nil {
+		fmt.Println("Failed to save message to DB:", err)
+	}
 }
 
 // | Date of change | By        | Comment |
@@ -90,9 +96,22 @@ func (mc MqttCredentials) dump() {
 	fmt.Printf("clientId : %s", mc.ClientId)
 }
 
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-16     | PQ        | Created |
+//
+// # Description
+// - Inicjalizacja bazy
+//
 // # Author
-// - Polariusz
+// - PQ
+
+//important um zu starten            go run *.go
 func main() {
+	if err := InitDatabase(); err != nil {
+		panic(fmt.Sprintf("Database init failed: %s", err))
+	}
+
 	server := fiber.New()
 	var serverState ServerState
 
