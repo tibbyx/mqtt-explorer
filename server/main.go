@@ -283,6 +283,7 @@ type TopicsWrapper struct {
 //
 // # Used in
 // - PostTopicSubscribeHandler()
+// - PostTopicUnsubscribeHandler()
 //
 // # Author
 // - Polariusz
@@ -385,9 +386,7 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 // - The method shall be a handler that allows to unsubscribe from subscribed topics.
 // - The method shall accept a jsonified structure that follows the struct TopicsWrapper.
 // - The method shall return a 200 (Ok) if all the topics from the converted to type TopicsWrapper have been successfully unsubscribed.
-// - The method shall return a 400 (BadRequest) if at least one topic could not be unsubscribed from.
-//   - The reason might be because of the topic being not even subscribed or some weird utf-8 error.
-//   - TODO: the 400 might be changed.
+// - The method shall return a 207 (Multi Status) if at least one topic could not be unsubscribed from.
 // - The method shall return a 400 (Bad Request) if the data from the client does not match that one fo the struct TopicsWrapper.
 //
 // # Usage
@@ -398,9 +397,10 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 // # Returns
 // - 200 (Ok): JSON
 //   - {"goodJson":"Unsubscribed from requested"}
+// - 207 (Multi Status): JSON
+//   - {"result":{<TOPIC-N>:{"Status":<STATUS-N>,"Message":<MESSAGE-N>}}}
 // - 400 (Bad Request): JSON
 //   - {"badJson":`const BADJSON`}
-//   - {"badJson":"Some topics were not even subscribed","badTopics":badTopics,"`unsubscribedTopics`":`goodTopics`}
 // - 401 (Unauthorized): JSON
 //   - {"401":"You fool!"}
 //
@@ -425,15 +425,19 @@ func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 
 		// TODO: Validate topics (if they are empty)
 
-		var badTopics []string
-		var goodTopics []string
+		topicResult := make(map[string]TopicResult)
+		atLeastOneBadTopic := false
 
 		for _, topic := range unsubscribeTopics.Topics {
 			if !slices.Contains(serverState.subscribedTopics, topic) {
-				badTopics = append(serverState.subscribedTopics, topic)
+				topicResult[topic] = TopicResult{"What", "The topic wasn't even subscribed"}
+				atLeastOneBadTopic = true
 			} else {
+				// unsubscribe from mqtt-broker
 				serverState.mqttClient.Unsubscribe(topic)
-				goodTopics = append(goodTopics, topic)
+				// add fine to the map
+				topicResult[topic] = TopicResult{"Fine", "Unsubscribed successfully"}
+				// Find the topic in the array and remove it.
 				for index, stateTopic := range serverState.subscribedTopics {
 					if strings.Compare(stateTopic, topic) == 0 {
 						serverState.subscribedTopics = append(serverState.subscribedTopics[:index], serverState.subscribedTopics[index+1:]...)
@@ -443,18 +447,16 @@ func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 			}
 		}
 
-		if len(badTopics) != 0 {
+		if atLeastOneBadTopic {
 			// TODO: The status code is meh, as the function at this point would
 			// subscribe to at least some of the requested topics.
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"badJson": "Some topics were not even subscribed",
-				"badTopics": badTopics,
-				"unsubscribedTopics": goodTopics,
+			return c.Status(fiber.StatusMultiStatus).JSON(fiber.Map{
+				"result": topicResult,
 			})
 		}
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"goodJson": "Unsubscribed from requested",
+			"result": topicResult,
 		})
 	}
 }
