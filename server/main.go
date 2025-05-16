@@ -374,10 +374,11 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 	}
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Polariusz | Created       |
-// | 2025-05-13     | Polariusz | Documentation |
+// | Date of change | By        | Comment                |
+// +----------------+-----------+------------------------+
+// |                | Polariusz | Created                |
+// | 2025-05-13     | Polariusz | Documentation          |
+// | 2025-05-16     | Polariusz | Changed one 400 to 207 |
 //
 // # Method-Type
 // - Handler
