@@ -598,7 +598,7 @@ func GetPingHandler(serverState *ServerState) fiber.Handler {
 	}
 }
 
-// | Date of change | By     | Comment			  	   |
+// | Date of change | By     | Comment                 |
 // +----------------+--------+-------------------------+
 // | 2025-05-14     | Tibbyx | Created & Documentation |
 //
@@ -631,7 +631,7 @@ func createMessageHandler(serverState *ServerState) mqtt.MessageHandler {
 	}
 }
 
-// | Date of change | By     | Comment			  	   |
+// | Date of change | By     | Comment                 |
 // +----------------+--------+-------------------------+
 // | 2025-05-14     | Tibbyx | Created & Documentation |
 //
