@@ -1,15 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"github.com/gofiber/fiber/v2"
 	"fmt"
 	"github.com/eclipse/paho.mqtt.golang"
 	"slices"
 	"strings"
-	"github.com/valyala/fasthttp"
 	"time"
-	"bufio"
 )
 
 // # Author
@@ -124,8 +121,6 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Post("/topic/send-message", PostTopicSendMessageHandler(serverState))
 	server.Get("/topic/messages", GetTopicMessagesHandler(serverState))
 	server.Get("/ping", GetPingHandler(serverState))
-	server.Post("/write", writeStuff())
-	server.Get("/sse", SseHandler())
 	server.Get("/topic/all-known", GetTopicAllKnownHandler(serverState))
 }
 
@@ -629,87 +624,6 @@ func GetPingHandler(serverState *ServerState) fiber.Handler {
 			return c.Status(fiber.StatusOK).JSON(fiber.Map{
 				"goodMqtt": "pong",
 			})
-	}
-}
-
-// TODO: I've written this to play around with SSE a bit more. This doesn't do anything with the mqtt part.
-//       It simply needs to be recycled for a way of the client of getting new messages.
-func writeStuff() fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		var messageWrapper MessageWrapper
-
-		if err := c.BodyParser(&messageWrapper); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"badJson": BADJSON,
-			})
-		}
-
-		active = append(active, ActiveMessageWrapper{
-			ClientId: "kurwaNieWiem",
-			Topic: messageWrapper.Topic,
-			Message: messageWrapper.Message,
-			epoch: time.Now().Unix(),
-		})
-		return nil
-	}
-}
-
-// TODO: I've written this to play around with SSE a bit more. This doesn't do anything with the mqtt part.
-//       It simply needs to be recycled for a way of the client of getting new messages.
-var active []ActiveMessageWrapper
-
-// TODO: I've written this to play around with SSE a bit more. This doesn't do anything with the mqtt part.
-//       It simply needs to be recycled for a way of the client of getting new messages.
-type ActiveMessageWrapper struct {
-	ClientId string
-	Topic string
-	Message string
-	epoch int64
-}
-
-// TODO: I've written this to play around with SSE a bit more. This doesn't do anything with the mqtt part.
-//       It simply needs to be recycled for a way of the client of getting new messages.
-func SseHandler() fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		// setting headers to make the handler be the SSE.
-		c.Set("Content-Type", "text/event-stream")
-		c.Set("Cache-Control", "no-cache")
-		c.Set("Connection", "keep-alive")
-		c.Set("Transfer-Encoding", "chunked")
-
-		// Here are some things to unpack..:
-		// Status() is simple to understand, we simply tell that whatever we return is 200.
-		// With content, we define a stream writer. That stream writer will be a fasthttp.StreamWriter.
-		// fasthttp.StreamWriter wants a function that we write below.
-		// The argument w *bufio.Writer abstracts the socket connection for us and we can use it to write any things
-		// to the client part of the project.
-		c.Status(fiber.StatusOK).Context().SetBodyStreamWriter(fasthttp.StreamWriter(func(w *bufio.Writer) {
-			for {
-				//var msg string
-
-				if len(active) > 0 {
-					aaaaa := struct{Messages []ActiveMessageWrapper}{active,}
-					msg, _ := json.Marshal(aaaaa)
-					//msg = fmt.Sprintf("%d - message received: %s", i, active[0])
-					// To conform to the sse protocol, it must begin with `data:` and end with `\n\n`.
-					fmt.Fprintf(w, "data: Message: %s\n\n", msg)
-					// remove the message from the buffer
-					active = active[:0]
-					// w.Flush() writes anything in the println immediately out. With the err := and the check below, we check if we got any error.
-					err := w.Flush()
-					if err != nil {
-						// Refreshing page in web browser will establish a new
-						// SSE connection, but only (the last) one is alive, so
-						// dead connections must be closed here.
-						fmt.Printf("Error while flushing: %v. Closing http connection.\n", err)
-
-						break
-					}
-				}
-				time.Sleep(10 * time.Second)
-			}
-		}))
-		return nil
 	}
 }
 
