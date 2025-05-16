@@ -1,12 +1,8 @@
-import './App.css'
+import MqttDashboard from "@/components/MqttDashboard.tsx";
 
 function App() {
-
-
     return (
-        <>
-            <span>Hello Dom</span>
-        </>
+        <MqttDashboard/>
     )
 }
 
