@@ -117,6 +117,7 @@ func main() {
 // - Polariusz
 func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Post("/credentials", PostCredentialsHandler(serverState))
+	server.Post("/disconnect", PostDisconnectFromBrokerHandler(serverState))
 	server.Post("/topic/subscribe", PostTopicSubscribeHandler(serverState))
 	server.Post("/topic/unsubscribe", PostTopicUnsubscribeHandler(serverState))
 	server.Get("/topic/subscribed", GetTopicSubscribedHandler(serverState))
@@ -824,6 +825,51 @@ func GetTopicAllKnownHandler(serverState *ServerState) fiber.Handler {
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"Topics": serverState.allKnownTopics,
+		})
+	}
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------|
+// | 2025-05-16     | Polariusz | Created |
+//
+// # Method-Type
+// - Handler
+//
+// # Description
+// - The method shall disconnect the from the argument serverstate mqttClient from the MQTT-Broker
+// - The method shall return a 200 (Ok) if the user is authenticated
+// - The method shall return a 401 (Unauthorized) if the user is not authenticated
+//
+// # Usage
+// - Call declared by the routing method addRoutes() URL with the GET-Method.
+//
+// # Returns
+// - 200 (Ok): JSON
+//   - {"Fine":"The MQTT-Client disconnected from <IP>:<PORT> Broker"}
+// - 401 (Unauthorized): JSON
+//   - {"BadRequest":"The server isn't even connected to any MQTT-Brokers"}
+//
+// # Author
+// - Polariusz
+func PostDisconnectFromBrokerHandler(serverState *ServerState) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if(serverState.userCreds.Ip == "") {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"BadRequest": "The server isn't even connected to any MQTT-Brokers",
+			})
+		}
+
+		serverState.mqttClient.Disconnect(250)
+		message := fmt.Sprintf("The MQTT-Client disconented from %s:%s Broker", serverState.userCreds.Ip, serverState.userCreds.Port)
+
+		serverState.userCreds.Ip = ""
+		serverState.userCreds.Port = ""
+		serverState.userCreds.ClientId = ""
+		serverState.subscribedTopics = nil
+
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"Fine": message,
 		})
 	}
 }
