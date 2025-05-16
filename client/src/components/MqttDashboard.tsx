@@ -108,7 +108,7 @@ function MqttDashboard() {
                         </div>
                     )
                 ) : (
-                    <ConnectionPanel />
+                    <ConnectionPanel onToggleConnect={handleToggleConnect} />
                 )}
 
             </div>

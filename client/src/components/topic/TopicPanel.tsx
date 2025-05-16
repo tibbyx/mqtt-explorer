@@ -77,13 +77,15 @@ export default function TopicPanel({
                 <h2 className="font-semibold text-gray-700 dark:text-gray-200">
                     Server
                 </h2>
-                <Button
-                    size="sm"
-                    onClick={onToggleConnect}
-                    className="bg-[#7a62f6] hover:bg-[#6952e3] text-white rounded-full"
-                >
-                    {isConnected ? "Disconnect" : "Connect"}
-                </Button>
+                {isConnected && (
+                    <Button
+                        size="sm"
+                        onClick={onToggleConnect}
+                        className="bg-[#7a62f6] hover:bg-[#6952e3] text-white rounded-full"
+                    >
+                        Disconnect
+                    </Button>
+                )}
             </div>
 
             {isConnected && (
