@@ -30,10 +30,11 @@ func messageBuilder(creds MqttCredentials, message string) string {
 	return message
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Polariusz | Created       |
-// | 2025-05-13     | Polariusz | Documentation |
+// | Date of change | By        | Comment              |
+// +----------------+-----------+----------------------+
+// |                | Polariusz | Created              |
+// | 2025-05-13     | Polariusz | Documentation        |
+// | 2025-05-16     | Polariusz | added AllKnownTopics |
 //
 // # Description
 //
@@ -50,7 +51,8 @@ type ServerState struct {
 	userCreds MqttCredentials
 	mqttClient mqtt.Client
 	subscribedTopics []string // TODO: This probably has to be a struct array of a pair, a pair of topic and epoch time.
-	receivedMessages map[string][]string
+	allKnownTopics []string // TODO: This probably has to be a struct array of a pair, a pair of topic and epoch time.
+	receivedMessages map[string][]string // TODO: This should be in a database that we don't have yet.
 }
 
 // | Date of change | By        | Comment       |
@@ -123,6 +125,7 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Get("/ping", GetPingHandler(serverState))
 	server.Post("/write", writeStuff())
 	server.Get("/sse", SseHandler())
+	server.Get("/topic/all-known", GetTopicAllKnownHandler(serverState))
 }
 
 // | Date of change | By        | Comment       |
@@ -355,6 +358,7 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 				} else {
 					topicResult[topic] = TopicResult{"Fine", "Subscribed to the topic"}
 					serverState.subscribedTopics = append(serverState.subscribedTopics, topic)
+					serverState.allKnownTopics = append(serverState.allKnownTopics, topic)
 				}
 			} else {
 				atLeastOneBadTopic = true
@@ -782,6 +786,44 @@ func GetTopicMessagesHandler(serverState *ServerState) fiber.Handler {
 		return c.JSON(fiber.Map{
 			"topic": topic,
 			"messages": messages,
+		})
+	}
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------|
+// | 2025-05-14     | Polariusz | Created |
+//
+// # Method-Type
+// - Handler
+//
+// # Description
+// - The method shall return a list of all previously subscribed Topics in a JSON format
+// - The method shall return a 200 (Ok) with the list if user is authenticated
+// - The method shall return a 400 (Bad Request) if the user is not authenticated
+//
+// # Usage
+// - Call declared by the routing method addRoutes() URL with the GET-Method.
+//
+// # Returns
+// - 200 (Ok): JSON
+//   - {"Topics":[<TOPIC-N>]}
+// - 401 (Unauthorized): JSON
+//   - {"Message":"Authenticate yourself first!"}
+//
+// # Author
+// - Polariusz
+func GetTopicAllKnownHandler(serverState *ServerState) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if serverState.userCreds.Ip == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				// TODO: Explain the message a bit more
+				"Message": "Authenticate yourself first!",
+			})
+		}
+
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"Topics": serverState.allKnownTopics,
 		})
 	}
 }
