@@ -121,7 +121,8 @@ export function MessagePanel({
                     onValueChange={handleQosFilterChange}
                 >
                     <SelectTrigger
-                        className="w-28 h-9 rounded-lg border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 text-gray-700 dark:text-gray-200 focus:ring-[#7a62f6]">
+                        size="sm"
+                        className="rounded-lg border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 text-gray-700 dark:text-gray-200 focus:ring-[#7a62f6]">
                         <SelectValue placeholder="QoS" className="font-medium"/>
                     </SelectTrigger>
                     <SelectContent className="rounded-lg border-gray-200 dark:border-gray-800">
