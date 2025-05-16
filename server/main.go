@@ -13,14 +13,6 @@ import (
 // - Polariusz
 const BADJSON = "I am nowt sowwy >:3. An expected! ewwow has happened. Youw weak json! iws of the wwongest fowmat thawt does nowt cowwespond tuwu the stwong awnd independent stwuct! >:P"
 
-// # Author
-// - Polariusz
-//var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
-//	fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
-//	 TODO: The payload and topic will be written into the database.
-//	       It also needs to store the current epoch.
-//}
-
 // | Date of change | By        | Comment |
 // +----------------+-----------+---------+
 // | 2025-05-13     | Polariusz | Created |
@@ -96,12 +88,12 @@ func (mc MqttCredentials) dump() {
 func main() {
 	server := fiber.New()
 	var serverState ServerState
-    serverState.receivedMessages = make(map[string][]string)
+	serverState.receivedMessages = make(map[string][]string)
 
 	addRoutes(server, &serverState)
 
-    // need to build ui via 'npm run build' in client first
-    // server.Static("/", "../client/dist")
+	// need to build ui via 'npm run build' in client first
+	// server.Static("/", "../client/dist")
 	server.Listen(":3000")
 }
 
@@ -124,8 +116,8 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Post("/topic/unsubscribe", PostTopicUnsubscribeHandler(serverState))
 	server.Get("/topic/subscribed", GetTopicSubscribedHandler(serverState))
 	server.Post("/topic/send-message", PostTopicSendMessageHandler(serverState))
-	server.Get("topic/messages", GetTopicMessagesHandler(serverState))
-	server.Get("/ping", GetPingHandler(serverState));
+	server.Get("/topic/messages", GetTopicMessagesHandler(serverState))
+	server.Get("/ping", GetPingHandler(serverState))
 }
 
 // | Date of change | By        | Comment       |
@@ -606,10 +598,9 @@ func GetPingHandler(serverState *ServerState) fiber.Handler {
 	}
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Tibbyx | Created       |
-// | 2025-05-14     | Tibbyx | Documentation |
+// | Date of change | By     | Comment			  	   |
+// +----------------+--------+-------------------------+
+// | 2025-05-14     | Tibbyx | Created & Documentation |
 //
 // # Method-Type
 // - MQTT Handler Factory
@@ -640,10 +631,9 @@ func createMessageHandler(serverState *ServerState) mqtt.MessageHandler {
 	}
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Tibbyx | Created       |
-// | 2025-05-14     | Tibbyx | Documentation |
+// | Date of change | By     | Comment			  	   |
+// +----------------+--------+-------------------------+
+// | 2025-05-14     | Tibbyx | Created & Documentation |
 //
 // # Method-Type
 // - Handler
@@ -665,7 +655,6 @@ func createMessageHandler(serverState *ServerState) mqtt.MessageHandler {
 //
 // # Author
 // - Tibbyx
-
 func GetTopicMessagesHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		topic := c.Query("topic")
