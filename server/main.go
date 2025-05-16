@@ -793,7 +793,7 @@ func GetTopicMessagesHandler(serverState *ServerState) fiber.Handler {
 
 // | Date of change | By        | Comment |
 // +----------------+-----------+---------|
-// | 2025-05-14     | Polariusz | Created |
+// | 2025-05-16     | Polariusz | Created |
 //
 // # Method-Type
 // - Handler
@@ -801,7 +801,7 @@ func GetTopicMessagesHandler(serverState *ServerState) fiber.Handler {
 // # Description
 // - The method shall return a list of all previously subscribed Topics in a JSON format
 // - The method shall return a 200 (Ok) with the list if user is authenticated
-// - The method shall return a 400 (Bad Request) if the user is not authenticated
+// - The method shall return a 401 (Unauthorized) if the user is not authenticated
 //
 // # Usage
 // - Call declared by the routing method addRoutes() URL with the GET-Method.
