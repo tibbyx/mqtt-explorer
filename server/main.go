@@ -272,10 +272,30 @@ type TopicsWrapper struct {
 	Topics []string
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Polariusz | Created       |
-// | 2025-05-13     | Polariusz | Documentation |
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-16     | Polariusz | Created |
+//
+// # JSON-Structure:
+// - {"Status":<S>,"Message":<M>}
+//   - <S>: Status from the methods. Currently it can be 'Fine', 'What' and 'Error'
+//   - <M>: Defined string literals in the methods. These explain what has happened.
+//
+// # Used in
+// - PostTopicSubscribeHandler()
+//
+// # Author
+// - Polariusz
+type TopicResult struct {
+	Status string
+	Message string
+}
+
+// | Date of change | By        | Comment                |
+// +----------------+-----------+------------------------+
+// |                | Polariusz | Created                |
+// | 2025-05-13     | Polariusz | Documentation          |
+// | 2025-05-16     | Polariusz | Changed one 400 to 207 |
 //
 // # Method-Type
 // - Handler
@@ -284,9 +304,7 @@ type TopicsWrapper struct {
 // - The method shall be a handler that allows to subscribe the MQTT-Broker's topics.
 // - The method shall accept a jsonified structure that follows the struct TopicsWrapper.
 // - The method shall return a 200 (Ok) if all requested topics were subscribed.
-// - The method shall return a 400 (Bad Request) if at least one topic was not subscribed.
-//   - The reason might be because of some weird utf-8 error.
-//   - TODO: the 400 might be changed.
+// - The method shall return a 207 (Multi Status) if at least one topic was not subscribed.
 // - The method shall return a 400 (Bad Request) if the data from the client does not match that one fo the struct TopicsWrapper.
 //
 // # Usage
@@ -297,10 +315,10 @@ type TopicsWrapper struct {
 // # Returns
 // - 200 (Ok): JSON
 //   - {"goodJson":"Subscribed to requested topics"}
+// - 207 (Multi Status): JSON
+//   - {"result":{<TOPIC-N>:{"Status":<STATUS-N>,"Message":<MESSAGE-N>}}}
 // - 400 (Bad Request): JSON
 //   - {"badJson":`const BADJSON`}
-// - 400 (Bad Request): JSON
-//   - {"badJson":"Could not subscribe to these topics","topics":`badTopics`}
 // - 401 (Unauthorized): JSON
 //   - {"401":"You fool!"}
 //
@@ -325,29 +343,32 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 
 		// TODO: Validate topics (if they are empty)
 
-		var badTopics []string
+		topicResult := make(map[string]TopicResult)
+		atLeastOneBadTopic := false
 
 		for _, topic := range subscribeTopics.Topics {
 			if !slices.Contains(serverState.subscribedTopics, topic) {
 				if token := serverState.mqttClient.Subscribe(topic, 0, nil); token.Wait() && token.Error() != nil {
-					badTopics = append(badTopics, topic)
+					atLeastOneBadTopic = true
+					topicResult[topic] = TopicResult{"Error", "Make sure that the topic conforms the MQTT-Broker configuration."}
 				} else {
+					topicResult[topic] = TopicResult{"Fine", "Subscribed to the topic"}
 					serverState.subscribedTopics = append(serverState.subscribedTopics, topic)
 				}
+			} else {
+				atLeastOneBadTopic = true
+				topicResult[topic] = TopicResult{"What", "The topic is already subscribed"}
 			}
 		}
 
-		if len(badTopics) != 0 {
-			// TODO: The status code is meh, as the function at this point would
-			// subscribe to at least some of the requested topics.
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"badJson": "Could not subscribe to these topics",
-				"topics": badTopics,
+		if atLeastOneBadTopic {
+			return c.Status(fiber.StatusMultiStatus).JSON(fiber.Map{
+				"result": topicResult,
 			})
 		}
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"goodJson": "Subscribed to requested topics",
+			"result": topicResult,
 		})
 	}
 }
