@@ -71,7 +71,7 @@ export function MessagePanel({
     }
 
     return (
-        <div className="flex-1 flex flex-col h-full bg-gray-50 dark:bg-gray-900">
+        <div className="flex-1 flex flex-col h-full bg-gray-50 dark:bg-[var(--secondary-foreground)]">
             <MessageTopicHeader
                 topicName={topic.name}
                 isSubscribed={!!isSubscribed}

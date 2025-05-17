@@ -26,13 +26,11 @@ export function QosSelect({
             <SelectTrigger
                 id={id}
                 size="sm"
-                className={`${
-                    id ? "w-max" : "rounded-lg"
-                } border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 text-gray-700 dark:text-gray-200 focus:ring-[#7a62f6]`}
+                className="bg-white dark:bg-[var(--popover)]"
             >
                 <SelectValue placeholder={label || "QoS"} className="font-medium"/>
             </SelectTrigger>
-            <SelectContent className="rounded-lg border-gray-200 dark:border-gray-800">
+            <SelectContent>
                 {showAnyOption && <SelectItem value="any">Any QoS</SelectItem>}
                 <SelectItem value="0">QoS 0</SelectItem>
                 <SelectItem value="1">QoS 1</SelectItem>

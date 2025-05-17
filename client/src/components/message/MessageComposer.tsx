@@ -21,7 +21,7 @@ export function MessageComposer({
                                     onPublish,
                                 }: MessageComposerProps) {
     return (
-        <div className="p-4 py-10 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
+        <div className="p-4 py-10 bg-[var(--background)] border-y border-[var(--border)]">
             <form onSubmit={onPublish} className="space-y-3">
                 <div className="flex gap-4">
                     <div className="flex-1">
@@ -29,7 +29,7 @@ export function MessageComposer({
                             placeholder="Enter message payload..."
                             value={messageText}
                             onChange={(e) => onMessageChange(e.target.value)}
-                            className="min-h-[90px] rounded-lg border-gray-200 dark:border-gray-800 focus-visible:ring-[#7a62f6] text-gray-800 dark:text-gray-200"
+                            className="min-h-[90px]"
                         />
                     </div>
                     <div className="flex flex-col">
@@ -47,7 +47,7 @@ export function MessageComposer({
                             <Button
                                 type="submit"
                                 disabled={!messageText.trim()}
-                                className="w-22 h-10 bg-[#7a62f6] hover:bg-[#6952e3] text-white"
+                                className="w-24 h-10"
                             >
                                 <Send className="h-4 w-4"/>
                                 Publish

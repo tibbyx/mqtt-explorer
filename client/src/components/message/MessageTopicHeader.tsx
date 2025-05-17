@@ -19,9 +19,9 @@ export function MessageTopicHeader({
                                    }: TopicHeaderProps) {
     return (
         <div
-            className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between bg-white dark:bg-gray-950">
+            className="flex items-center justify-between p-4 bg-[var(--background)] border-y border-[var(--border)]">
             <div className="flex items-center gap-2">
-                <h2 className="font-medium text-gray-700 dark:text-gray-200">
+                <h2>
                     {topicName}
                 </h2>
                 <Button
