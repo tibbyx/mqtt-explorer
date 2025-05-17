@@ -78,7 +78,7 @@ function MqttDashboard() {
     }
 
     return (
-        <div className={"flex flex-col h-screen bg-gray-50 dark:bg-gray-900"}>
+        <div className={"flex flex-col h-screen"}>
             <Header onSearch={handleSearch}/>
             <div className={"flex flex-1 overflow-hidden"}>
                 <TopicPanel
@@ -103,12 +103,12 @@ function MqttDashboard() {
                             onUnsubscribe={handleUnsubscribe}
                         />
                     ) : (
-                        <div className="flex-1 flex items-center justify-center text-gray-500">
+                        <div className="flex-1 flex items-center justify-center border-t">
                             <p>Select a topic to view messages</p>
                         </div>
                     )
                 ) : (
-                    <ConnectionPanel onToggleConnect={handleToggleConnect} />
+                    <ConnectionPanel onToggleConnect={handleToggleConnect}/>
                 )}
 
             </div>

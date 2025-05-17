@@ -37,11 +37,11 @@ export default function TopicItem({
                         value={editingName}
                         onChange={onEditNameChange}
                         autoFocus
-                        className="h-8 flex-1 rounded-lg border-gray-200 dark:border-gray-800 focus-visible:ring-[#7a62f6]"
+                        className="h-8 flex-1"
                     />
                     <Button
                         size="sm"
-                        className="h-8 w-8 p-0 bg-[#7a62f6] hover:bg-[#6952e3] rounded-lg"
+                        className="h-8 w-8 p-0"
                         onClick={onSubmitEdit}
                     >
                         <Check className="h-4 w-4"/>
@@ -49,7 +49,7 @@ export default function TopicItem({
                     <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 w-8 p-0 rounded-lg border-gray-200 dark:border-gray-800"
+                        className="h-8 w-8 p-0"
                         onClick={onCancelEdit}
                     >
                         <X className="h-4 w-4"/>
@@ -64,14 +64,14 @@ export default function TopicItem({
             <div
                 className={`flex items-center justify-between p-2.5 rounded-xl transition-all duration-200 cursor-pointer group ${
                     selected
-                        ? "bg-[#7a62f6]/10 text-[#7a62f6] dark:bg-[#7a62f6]/20"
-                        : "hover:bg-gray-100 dark:hover:bg-gray-900"
+                        ? "bg-[var(--primary)]/20 dark:bg-[var(--primary)]/90"
+                        : "hover:bg-[var(--primary)]/10 dark:hover:bg-[var(--primary)]/30"
                 }`}
                 onClick={onSelect}
             >
                 <div className="flex items-center gap-2 flex-1 min-w-0">
           <span
-              className={`truncate text-gray-800 dark:text-gray-200 ${
+              className={`truncate ${
                   selected ? "font-medium" : ""
               }`}
           >
@@ -79,7 +79,7 @@ export default function TopicItem({
           </span>
                     {topic.subscribed && (
                         <span
-                            className="text-xs bg-[#7a62f6]/10 text-[#7a62f6] dark:bg-[#7a62f6]/20 px-2 py-0.5 rounded-full font-medium">
+                            className="text-xs px-2 py-0.5 rounded-full font-medium bg-[var(--background)] border border-[var(--border)]">
               Subscribed
             </span>
                     )}
@@ -88,7 +88,7 @@ export default function TopicItem({
                     <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 w-7 p-0 rounded-lg text-gray-500 hover:text-[#7a62f6] hover:bg-[#7a62f6]/10"
+                        className="h-7 w-7 p-0 hover:bg-[#7a62f6]/10"
                         onClick={(e) => {
                             e.stopPropagation();
                             onStartEditing(topic);
