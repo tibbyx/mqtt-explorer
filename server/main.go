@@ -4,9 +4,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"fmt"
 	"github.com/eclipse/paho.mqtt.golang"
-	"time"
 	"slices"
 	"strings"
+	"time"
 )
 
 // # Author
@@ -27,10 +27,11 @@ func messageBuilder(creds MqttCredentials, message string) string {
 	return message
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Polariusz | Created       |
-// | 2025-05-13     | Polariusz | Documentation |
+// | Date of change | By        | Comment              |
+// +----------------+-----------+----------------------+
+// |                | Polariusz | Created              |
+// | 2025-05-13     | Polariusz | Documentation        |
+// | 2025-05-16     | Polariusz | added AllKnownTopics |
 //
 // # Description
 //
@@ -47,7 +48,8 @@ type ServerState struct {
 	userCreds MqttCredentials
 	mqttClient mqtt.Client
 	subscribedTopics []string // TODO: This probably has to be a struct array of a pair, a pair of topic and epoch time.
-	receivedMessages map[string][]string
+	allKnownTopics []string // TODO: This probably has to be a struct array of a pair, a pair of topic and epoch time.
+	receivedMessages map[string][]string // TODO: This should be in a database that we don't have yet.
 }
 
 // | Date of change | By        | Comment       |
@@ -112,12 +114,14 @@ func main() {
 // - Polariusz
 func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Post("/credentials", PostCredentialsHandler(serverState))
+	server.Post("/disconnect", PostDisconnectFromBrokerHandler(serverState))
 	server.Post("/topic/subscribe", PostTopicSubscribeHandler(serverState))
 	server.Post("/topic/unsubscribe", PostTopicUnsubscribeHandler(serverState))
 	server.Get("/topic/subscribed", GetTopicSubscribedHandler(serverState))
 	server.Post("/topic/send-message", PostTopicSendMessageHandler(serverState))
 	server.Get("/topic/messages", GetTopicMessagesHandler(serverState))
 	server.Get("/ping", GetPingHandler(serverState))
+	server.Get("/topic/all-known", GetTopicAllKnownHandler(serverState))
 }
 
 // | Date of change | By        | Comment       |
@@ -267,10 +271,31 @@ type TopicsWrapper struct {
 	Topics []string
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Polariusz | Created       |
-// | 2025-05-13     | Polariusz | Documentation |
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-16     | Polariusz | Created |
+//
+// # JSON-Structure:
+// - {"Status":<S>,"Message":<M>}
+//   - <S>: Status from the methods. Currently it can be 'Fine', 'What' and 'Error'
+//   - <M>: Defined string literals in the methods. These explain what has happened.
+//
+// # Used in
+// - PostTopicSubscribeHandler()
+// - PostTopicUnsubscribeHandler()
+//
+// # Author
+// - Polariusz
+type TopicResult struct {
+	Status string
+	Message string
+}
+
+// | Date of change | By        | Comment                |
+// +----------------+-----------+------------------------+
+// |                | Polariusz | Created                |
+// | 2025-05-13     | Polariusz | Documentation          |
+// | 2025-05-16     | Polariusz | Changed one 400 to 207 |
 //
 // # Method-Type
 // - Handler
@@ -279,9 +304,7 @@ type TopicsWrapper struct {
 // - The method shall be a handler that allows to subscribe the MQTT-Broker's topics.
 // - The method shall accept a jsonified structure that follows the struct TopicsWrapper.
 // - The method shall return a 200 (Ok) if all requested topics were subscribed.
-// - The method shall return a 400 (Bad Request) if at least one topic was not subscribed.
-//   - The reason might be because of some weird utf-8 error.
-//   - TODO: the 400 might be changed.
+// - The method shall return a 207 (Multi Status) if at least one topic was not subscribed.
 // - The method shall return a 400 (Bad Request) if the data from the client does not match that one fo the struct TopicsWrapper.
 //
 // # Usage
@@ -292,10 +315,10 @@ type TopicsWrapper struct {
 // # Returns
 // - 200 (Ok): JSON
 //   - {"goodJson":"Subscribed to requested topics"}
+// - 207 (Multi Status): JSON
+//   - {"result":{<TOPIC-N>:{"Status":<STATUS-N>,"Message":<MESSAGE-N>}}}
 // - 400 (Bad Request): JSON
 //   - {"badJson":`const BADJSON`}
-// - 400 (Bad Request): JSON
-//   - {"badJson":"Could not subscribe to these topics","topics":`badTopics`}
 // - 401 (Unauthorized): JSON
 //   - {"401":"You fool!"}
 //
@@ -320,37 +343,42 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 
 		// TODO: Validate topics (if they are empty)
 
-		var badTopics []string
+		topicResult := make(map[string]TopicResult)
+		atLeastOneBadTopic := false
 
 		for _, topic := range subscribeTopics.Topics {
 			if !slices.Contains(serverState.subscribedTopics, topic) {
 				if token := serverState.mqttClient.Subscribe(topic, 0, nil); token.Wait() && token.Error() != nil {
-					badTopics = append(badTopics, topic)
+					atLeastOneBadTopic = true
+					topicResult[topic] = TopicResult{"Error", "Make sure that the topic conforms the MQTT-Broker configuration."}
 				} else {
+					topicResult[topic] = TopicResult{"Fine", "Subscribed to the topic"}
 					serverState.subscribedTopics = append(serverState.subscribedTopics, topic)
+					serverState.allKnownTopics = append(serverState.allKnownTopics, topic)
 				}
+			} else {
+				atLeastOneBadTopic = true
+				topicResult[topic] = TopicResult{"What", "The topic is already subscribed"}
 			}
 		}
 
-		if len(badTopics) != 0 {
-			// TODO: The status code is meh, as the function at this point would
-			// subscribe to at least some of the requested topics.
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"badJson": "Could not subscribe to these topics",
-				"topics": badTopics,
+		if atLeastOneBadTopic {
+			return c.Status(fiber.StatusMultiStatus).JSON(fiber.Map{
+				"result": topicResult,
 			})
 		}
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"goodJson": "Subscribed to requested topics",
+			"result": topicResult,
 		})
 	}
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Polariusz | Created       |
-// | 2025-05-13     | Polariusz | Documentation |
+// | Date of change | By        | Comment                |
+// +----------------+-----------+------------------------+
+// |                | Polariusz | Created                |
+// | 2025-05-13     | Polariusz | Documentation          |
+// | 2025-05-16     | Polariusz | Changed one 400 to 207 |
 //
 // # Method-Type
 // - Handler
@@ -359,9 +387,7 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 // - The method shall be a handler that allows to unsubscribe from subscribed topics.
 // - The method shall accept a jsonified structure that follows the struct TopicsWrapper.
 // - The method shall return a 200 (Ok) if all the topics from the converted to type TopicsWrapper have been successfully unsubscribed.
-// - The method shall return a 400 (BadRequest) if at least one topic could not be unsubscribed from.
-//   - The reason might be because of the topic being not even subscribed or some weird utf-8 error.
-//   - TODO: the 400 might be changed.
+// - The method shall return a 207 (Multi Status) if at least one topic could not be unsubscribed from.
 // - The method shall return a 400 (Bad Request) if the data from the client does not match that one fo the struct TopicsWrapper.
 //
 // # Usage
@@ -372,9 +398,10 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 // # Returns
 // - 200 (Ok): JSON
 //   - {"goodJson":"Unsubscribed from requested"}
+// - 207 (Multi Status): JSON
+//   - {"result":{<TOPIC-N>:{"Status":<STATUS-N>,"Message":<MESSAGE-N>}}}
 // - 400 (Bad Request): JSON
 //   - {"badJson":`const BADJSON`}
-//   - {"badJson":"Some topics were not even subscribed","badTopics":badTopics,"`unsubscribedTopics`":`goodTopics`}
 // - 401 (Unauthorized): JSON
 //   - {"401":"You fool!"}
 //
@@ -399,15 +426,19 @@ func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 
 		// TODO: Validate topics (if they are empty)
 
-		var badTopics []string
-		var goodTopics []string
+		topicResult := make(map[string]TopicResult)
+		atLeastOneBadTopic := false
 
 		for _, topic := range unsubscribeTopics.Topics {
 			if !slices.Contains(serverState.subscribedTopics, topic) {
-				badTopics = append(serverState.subscribedTopics, topic)
+				topicResult[topic] = TopicResult{"What", "The topic wasn't even subscribed"}
+				atLeastOneBadTopic = true
 			} else {
+				// unsubscribe from mqtt-broker
 				serverState.mqttClient.Unsubscribe(topic)
-				goodTopics = append(goodTopics, topic)
+				// add fine to the map
+				topicResult[topic] = TopicResult{"Fine", "Unsubscribed successfully"}
+				// Find the topic in the array and remove it.
 				for index, stateTopic := range serverState.subscribedTopics {
 					if strings.Compare(stateTopic, topic) == 0 {
 						serverState.subscribedTopics = append(serverState.subscribedTopics[:index], serverState.subscribedTopics[index+1:]...)
@@ -417,18 +448,16 @@ func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 			}
 		}
 
-		if len(badTopics) != 0 {
+		if atLeastOneBadTopic {
 			// TODO: The status code is meh, as the function at this point would
 			// subscribe to at least some of the requested topics.
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"badJson": "Some topics were not even subscribed",
-				"badTopics": badTopics,
-				"unsubscribedTopics": goodTopics,
+			return c.Status(fiber.StatusMultiStatus).JSON(fiber.Map{
+				"result": topicResult,
 			})
 		}
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"goodJson": "Unsubscribed from requested",
+			"result": topicResult,
 		})
 	}
 }
@@ -672,6 +701,89 @@ func GetTopicMessagesHandler(serverState *ServerState) fiber.Handler {
 		return c.JSON(fiber.Map{
 			"topic": topic,
 			"messages": messages,
+		})
+	}
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------|
+// | 2025-05-16     | Polariusz | Created |
+//
+// # Method-Type
+// - Handler
+//
+// # Description
+// - The method shall return a list of all previously subscribed Topics in a JSON format
+// - The method shall return a 200 (Ok) with the list if user is authenticated
+// - The method shall return a 401 (Unauthorized) if the user is not authenticated
+//
+// # Usage
+// - Call declared by the routing method addRoutes() URL with the GET-Method.
+//
+// # Returns
+// - 200 (Ok): JSON
+//   - {"Topics":[<TOPIC-N>]}
+// - 401 (Unauthorized): JSON
+//   - {"Message":"Authenticate yourself first!"}
+//
+// # Author
+// - Polariusz
+func GetTopicAllKnownHandler(serverState *ServerState) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if serverState.userCreds.Ip == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				// TODO: Explain the message a bit more
+				"Message": "Authenticate yourself first!",
+			})
+		}
+
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"Topics": serverState.allKnownTopics,
+		})
+	}
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------|
+// | 2025-05-16     | Polariusz | Created |
+//
+// # Method-Type
+// - Handler
+//
+// # Description
+// - The method shall disconnect the from the argument serverstate mqttClient from the MQTT-Broker
+// - The method shall return a 200 (Ok) if the user is authenticated
+// - The method shall return a 401 (Unauthorized) if the user is not authenticated
+//
+// # Usage
+// - Call declared by the routing method addRoutes() URL with the GET-Method.
+//
+// # Returns
+// - 200 (Ok): JSON
+//   - {"Fine":"The MQTT-Client disconnected from <IP>:<PORT> Broker"}
+// - 401 (Unauthorized): JSON
+//   - {"BadRequest":"The server isn't even connected to any MQTT-Brokers"}
+//
+// # Author
+// - Polariusz
+func PostDisconnectFromBrokerHandler(serverState *ServerState) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if(serverState.userCreds.Ip == "") {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"BadRequest": "The server isn't even connected to any MQTT-Brokers",
+			})
+		}
+
+		serverState.mqttClient.Disconnect(250)
+		message := fmt.Sprintf("The MQTT-Client disconented from %s:%s Broker", serverState.userCreds.Ip, serverState.userCreds.Port)
+
+		serverState.userCreds.Ip = ""
+		serverState.userCreds.Port = ""
+		serverState.userCreds.ClientId = ""
+		serverState.subscribedTopics = nil
+
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"Fine": message,
 		})
 	}
 }
