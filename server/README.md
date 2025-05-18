@@ -19,7 +19,6 @@ go run main.go
 ```
 
 ### To log in to the MQTT-Broker:
-
 ```bash
 curl --request POST --header "Content-Type: application/json" --data '{"Ip" : "<BROKER-IP-HERE>", "Port" : "<BROKER-PORT-HERE>", "ClientId" : "<CLIENT-NAME-HERE>"}' localhost:3000/credentials
 ```
@@ -69,7 +68,6 @@ curl --request POST --header "Content-Type: application/json" --data '{"Ip" : "<
 ```
 
 #### If everything will go well, the server will return a 200 (OK) with a JSON:
-
 ```javascript
 {
   "goodJson" : "Connecting to <IP>:<PORT> succeded"
@@ -77,7 +75,6 @@ curl --request POST --header "Content-Type: application/json" --data '{"Ip" : "<
 ```
 
 ### To disconnect from the MQTT-Broker:
-
 ```bash
 curl -X POST localhost:3000/disconnect
 ```
@@ -97,13 +94,11 @@ curl -X POST localhost:3000/disconnect
 ```
 
 ### To subscribe to a topic or multiple at once:
-
 ```bash
 curl --request POST --header "Content-Type: application/json" --data '{"Topics":["<TOPIC-1>", "<TOPIC-2>", "<TOPIC-N>"]}' localhost:3000/topic/subscribe
 ```
 
 #### Or in other words, you need to POST into localhost:3000/topic/subscribe a JSON with this format:
-
 ```javascript
 {
   "Topics" :
@@ -129,27 +124,55 @@ curl --request POST --header "Content-Type: application/json" --data '{"Topics":
 }
 ```
 
-#### The server might not be able to subscribe to all topics, in this case it will return a 400 (Bad Request) (TODO: This status code is probably bad and needs to be replaced) with a JSON:
+#### The server might not be able to subscribe to all topics, in this case it will return a 207 (Multi Status) with a JSON:
 ```javascript
 {
-  "badJson" : "Could not subscribe to these topics",
-  "topics" : [
-    "badTopic-1",
-    "badTopic-2",
-    "badTopic-N"
-  ]
+  "result" :
+  {
+    <TOPIC-1> :
+    {
+      "Status" : <STATUS-1>,
+      "Message" : <MESSAGE-1>
+    },
+    <TOPIC-2> :
+    {
+      "Status" : <STATUS-2>,
+      "Message" : <MESSAGE-2>
+    },
+    <TOPIC-N> :
+    {
+      "Status" : <STATUS-N>,
+      "Message" : <MESSAGE-N>
+    }
+  }
 }
 ```
 
 #### If everything will go well, the server will return a 200 (OK) with a JSON:
 ```javascript
 {
-  "goodJson" : "Subscribed to the topics"
+  "result" :
+  {
+    <TOPIC-1> :
+    {
+      "Status" : "Fine",
+      "Message" : "Subscribed to the topic"
+    },
+    <TOPIC-2> :
+    {
+      "Status" : "Fine",
+      "Message" : "Subscribed to the topic"
+    },
+    <TOPIC-N> :
+    {
+      "Status" : "Fine",
+      "Message" : "Subscribed to the topic"
+    }
+  }
 }
 ```
 
 ### To unsubscribe to a topic or multiple at once:
-
 ```
 curl --request POST --header "Content-Type: application/json" --data '{"Topics":["<TOPIC-1>", "<TOPIC-2>", "<TOPIC-N>"]}' localhost:3000/topic/unsubscribe
 ```
@@ -173,35 +196,62 @@ curl --request POST --header "Content-Type: application/json" --data '{"Topics":
 }
 ```
 
-#### If the client wants to unsubscribe from topics that weren't even subscribed, the server will return a 400 (Bad Request) (TODO: This status code is probably bad and needs to be replaced) with a JSON:
+#### If the server cannot process the json, it will return a 400 (Bad request) with a JSON:
 ```javascript
 {
-  "badJson" : "Some topics were not even subscribed",
-  "badTopics" :
-  [
-    "<TOPIC-1>",
-    "<TOPIC-2>",
-    "<TOPIC-N>"
-  ],
-  "unsubscribedTopics" : 
-  [
-    "<TOPIC-3>",
-    "<TOPIC-4>",
-    "<TOPIC-M>"
-  ]
+  "badJson" : "I am nowt sowwy >:3. An expected! ewwow has happened. Youw weak json! iws of the wwongest fowmat thawt does nowt cowwespond tuwu the stwong awnd independent stwuct! >:P"
+}
+```
+
+#### If the client wants to unsubscribe from topics that weren't even subscribed, the server will return a 207 (Multi Status) with a JSON:
+```javascript
+{
+  "result" :
+  {
+    <TOPIC-1> :
+    {
+      "Status" : <STATUS-1>,
+      "Message" : <MESSAGE-1>
+    },
+    <TOPIC-2> :
+    {
+      "Status" : <STATUS-2>,
+      "Message" : <MESSAGE-2>
+    },
+    <TOPIC-N> :
+    {
+      "Status" : <STATUS-N>,
+      "Message" : <MESSAGE-N>
+    }
+  }
 }
 ```
 
 #### If eveything went well, the server will return a 200 (OK) with a JSON:
-
 ```javascript
 {
-  "goodJson" : "Unsubscribed from all"
+  "result" :
+  {
+    <TOPIC-1> :
+    {
+      "Status" : "Fine",
+      "Message" : "Unsubscribed successfully"
+    },
+    <TOPIC-2> :
+    {
+      "Status" : "Fine",
+      "Message" : "Unsubscribed successfully"
+    },
+    <TOPIC-N> :
+    {
+      "Status" : "Fine",
+      "Message" : "Unsubscribed successfully"
+    }
+  }
 }
 ```
 
 ### To get the subcribed list:
-
 ```bash
 curl localhost:3000/topic/subscribed
 ```
@@ -217,7 +267,6 @@ _There is no need for anything to send._
 ```
 
 #### If eveything went well, the server will return a 200 (OK) with a JSON:
-
 ```javascript
 {
   "topics" :
@@ -230,7 +279,6 @@ _There is no need for anything to send._
 ```
 
 ### To get all known topics:
-
 ```bash
 curl localhost:3000/topic/all-known
 ```
@@ -250,7 +298,6 @@ curl localhost:3000/topic/all-known
 ```
 
 ### To send a message:
-
 ```bash
 curl --request POST --header "Content-Type: application/json" --data '{"Topic" : "<TOPIC>", "Message" : "<MESSAGE>"}' localhost:3000/topic/send-message
 ```
@@ -277,7 +324,6 @@ curl --request POST --header "Content-Type: application/json" --data '{"Topic" :
 ```
 
 ### To get the messages matched to a topic:
-
 ```bash
 curl localhost:3000/topic/messages?topic=<TOPIC>
 ```
@@ -293,12 +339,11 @@ curl localhost:3000/topic/messages?topic=<TOPIC>
 ```javascript
 {
   "topic": <TOPIC>,
-  "messages": [<MESSAGE-1>, <MESSAGE-2>, <MESSAGE-N>],
+  "messages": [<MESSAGE-1>, <MESSAGE-2>, <MESSAGE-N>]
 }
 ```
 
 ### To check if the go server is still connected to the MQTT-Broker:
-
 ```bash
 curl localhost:3000/ping
 ```

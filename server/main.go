@@ -314,7 +314,7 @@ type TopicResult struct {
 //
 // # Returns
 // - 200 (Ok): JSON
-//   - {"goodJson":"Subscribed to requested topics"}
+//   - {"result":{<TOPIC-N>:{"Status":"Fine","Message":"Subscribed to the topic"}}}
 // - 207 (Multi Status): JSON
 //   - {"result":{<TOPIC-N>:{"Status":<STATUS-N>,"Message":<MESSAGE-N>}}}
 // - 400 (Bad Request): JSON
@@ -397,7 +397,7 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 //
 // # Returns
 // - 200 (Ok): JSON
-//   - {"goodJson":"Unsubscribed from requested"}
+//   - {"result":{<TOPIC-N>:{"Status":"Fine","Message":"Unsubscribed successfully"}}}
 // - 207 (Multi Status): JSON
 //   - {"result":{<TOPIC-N>:{"Status":<STATUS-N>,"Message":<MESSAGE-N>}}}
 // - 400 (Bad Request): JSON
