@@ -322,3 +322,106 @@ _There is no need for anything to send._
   "goodMqtt" : "pong"
 }
 ```
+
+### To Mark a topic as favourite:
+```bash
+curl -X POST -H "Content-Type: application/json" -d '{"Topics":["<TOPIC-N>"]}' localhost:3000/topic/favourites/mark
+```
+
+#### If the server cannot process the json, it will return a 400 (Bad request) with a JSON:
+```javascript
+{
+  "badJson" : "I am nowt sowwy >:3. An expected! ewwow has happened. Youw weak json! iws of the wwongest fowmat thawt does nowt cowwespond tuwu the stwong awnd independent stwuct! >:P"
+}
+```
+
+#### If the client is not authenticated, the server will return a 401 (Unauthorized) with a JSON:
+```javascript
+{
+  "Message": "Authenticate yourself first!",
+}
+```
+
+#### If some of the topics weren't in the favourite list, the server will return a 207 (Multi State) with a JSON:
+```javascript
+{
+  "result" :
+  {
+    "<TOPIC-1>" : {"Status":"<STATUS-1>","Message":"<MESSAGE-1>"},
+    "<TOPIC-2>" : {"Status":"<STATUS-2>","Message":"<MESSAGE-2>"},
+    "<TOPIC-N>" : {"Status":"<STATUS-N>","Message":"<MESSAGE-N>"}
+  }
+}
+```
+
+#### If everything went well, the server will return a 200 (OK) with a JSON:
+```javascript
+{
+  "result" :
+  {
+    "<TOPIC-1>" : {"Status":"Fine","Message":"Added topic to the favourite list"},
+    "<TOPIC-2>" : {"Status":"Fine","Message":"Added topic to the favourite list"},
+    "<TOPIC-N>" : {"Status":"Fine","Message":"Added topic to the favourite list"}
+  }
+}
+```
+
+### To Unmark a topic as favourite:
+```bash
+curl -X POST -H "Content-Type: application/json" -d '{"Topics":["<TOPIC-N>"]}' localhost:3000/topic/favourites/unmark
+```
+
+#### If the server cannot process the json, it will return a 400 (Bad request) with a JSON:
+```javascript
+{
+  "badJson" : "I am nowt sowwy >:3. An expected! ewwow has happened. Youw weak json! iws of the wwongest fowmat thawt does nowt cowwespond tuwu the stwong awnd independent stwuct! >:P"
+}
+```
+
+#### If the client is not authenticated, the server will return a 401 (Unauthorized) with a JSON:
+```javascript
+{
+  "Message": "Authenticate yourself first!",
+}
+```
+
+#### If some of the topics weren't in the favourite list, the server will return a 207 (Multi State) with a JSON:
+```javascript
+{
+  "result" :
+  {
+    "<TOPIC-1>" : {"Status":"<STATUS-1>","Message":"<MESSAGE-1>"},
+    "<TOPIC-2>" : {"Status":"<STATUS-2>","Message":"<MESSAGE-2>"},
+    "<TOPIC-N>" : {"Status":"<STATUS-N>","Message":"<MESSAGE-N>"}
+  }
+}
+```
+
+#### If everything went well, the server will return a 200 (OK) with a JSON:
+```javascript
+{
+  "result" :
+  {
+    "<TOPIC-1>" : {"Status":"Fine","Message":"Unmarked topic from favourite list"},
+    "<TOPIC-2>" : {"Status":"Fine","Message":"Unmarked topic from favourite list"},
+    "<TOPIC-N>" : {"Status":"Fine","Message":"Unmarked topic from favourite list"}
+  }
+}
+```
+
+### To get marked as favourite topics:
+```bash
+curl localhost:3000/topic/favourites
+```
+
+#### If the client is not authenticated, the server will return a 401 (Unauthorized) with a JSON:
+```javascript
+{
+  "Message": "Authenticate yourself first!",
+}
+```
+
+#### If everything went well, the server will return a 200 (OK) with list of favourite topics in a JSON format:
+{
+  "Topics":["<TOPIC-1>", "<TOPIC-2>", "<TOPIC-N>"]
+}

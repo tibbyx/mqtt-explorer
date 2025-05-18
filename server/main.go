@@ -27,11 +27,12 @@ func messageBuilder(creds MqttCredentials, message string) string {
 	return message
 }
 
-// | Date of change | By        | Comment              |
-// +----------------+-----------+----------------------+
-// |                | Polariusz | Created              |
-// | 2025-05-13     | Polariusz | Documentation        |
-// | 2025-05-16     | Polariusz | added AllKnownTopics |
+// | Date of change | By        | Comment               |
+// +----------------+-----------+-----------------------+
+// |                | Polariusz | Created               |
+// | 2025-05-13     | Polariusz | Documentation         |
+// | 2025-05-16     | Polariusz | added AllKnownTopics  |
+// | 2025-05-18     | Polariusz | added favouriteTopics |
 //
 // # Description
 //
@@ -50,6 +51,7 @@ type ServerState struct {
 	subscribedTopics []string // TODO: This probably has to be a struct array of a pair, a pair of topic and epoch time.
 	allKnownTopics []string // TODO: This probably has to be a struct array of a pair, a pair of topic and epoch time.
 	receivedMessages map[string][]string // TODO: This should be in a database that we don't have yet.
+	favouriteTopics []string // TODO: This should be in a database that we don't have yet.
 }
 
 // | Date of change | By        | Comment       |
@@ -122,6 +124,9 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Get("/topic/messages", GetTopicMessagesHandler(serverState))
 	server.Get("/ping", GetPingHandler(serverState))
 	server.Get("/topic/all-known", GetTopicAllKnownHandler(serverState))
+	server.Post("/topic/favourites/mark", PostTopicFavouritesMark(serverState))
+	server.Post("/topic/favourites/unmark", PostTopicFavouritesUnmark(serverState))
+	server.Get("/topic/favourites", GetTopicFavourites(serverState))
 }
 
 // | Date of change | By        | Comment       |
@@ -264,6 +269,8 @@ func validateCredentials(errorMessage *string, userCreds *MqttCredentials) int {
 // # Used in
 // - PostTopicSubscribeHandler()
 // - PostTopicUnsubscribeHandler()
+// - PostTopicMarkFavourites()
+// - PostTopicUnmarkFavourites()
 //
 // # Author
 // - Polariusz
@@ -283,6 +290,8 @@ type TopicsWrapper struct {
 // # Used in
 // - PostTopicSubscribeHandler()
 // - PostTopicUnsubscribeHandler()
+// - PostTopicMarkFavourites()
+// - PostTopicUnmarkFavourites()
 //
 // # Author
 // - Polariusz
@@ -784,6 +793,185 @@ func PostDisconnectFromBrokerHandler(serverState *ServerState) fiber.Handler {
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"Fine": message,
+		})
+	}
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------|
+// | 2025-05-18     | Polariusz | Created |
+//
+// # Method-Type
+// - Handler
+//
+// # Description
+// - The fiber.Handler shall append a topic to the favourite list.
+// - The function shall accept a json data which contains a list of Topics that the user wishes to mark as favourites.
+//
+// # Usage
+// - Call declared by the routing method addRoutes() URL with the GET-Method.
+// - Data: JSON Structure:
+//   - {"Topics":["<TOPIC-1>","<TOPIC-2>","<TOPIC-N>"]}
+//
+// # Returns
+// - 200 (OK): JSON
+//   - {"result":{<TOPIC-N>:{"Status":"Fine","Message":"Marked topic as Favourite"}}}
+// - 207 (Multi Status): JSON
+//   - {"result":{<TOPIC-N>:{"Status":"<STATUS-N>","Message":"<MESSAGE-N>"}}}
+// - 400 (Bad Request): JSON
+//   - {"badJson": "<const BADJSON>"}
+// - 401 (Unauthorized): JSON
+//   - {"Message": "Authenticate yourself first!"}
+//
+// # Author
+// - Polariusz
+func PostTopicFavouritesMark(serverState *ServerState) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if(serverState.userCreds.Ip == "") {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"Message": "Authenticate yourself first!",
+			})
+		}
+
+		var markTopics TopicsWrapper
+
+		if err := c.BodyParser(&markTopics); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"badJson": BADJSON,
+			})
+		}
+
+		topicResult := make(map[string]TopicResult)
+		atLeastOneBadTopic := false
+
+		for _, markTopic := range markTopics.Topics {
+			if slices.Contains(serverState.favouriteTopics, markTopic) {
+				atLeastOneBadTopic = true
+				topicResult[markTopic] = TopicResult{"What", "The topic is marked as favourite"}
+			} else {
+				serverState.favouriteTopics = append(serverState.favouriteTopics, markTopic)
+				topicResult[markTopic] = TopicResult{"Fine", "Added topic to the favourite list"}
+			}
+		}
+
+		if atLeastOneBadTopic {
+			return c.Status(fiber.StatusMultiStatus).JSON(fiber.Map{
+				"result": topicResult,
+			})
+		}
+
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"result": topicResult,
+		})
+	}
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------|
+// | 2025-05-18     | Polariusz | Created |
+//
+// # Method-Type
+// - Handler
+//
+// # Description
+// - The fiber.Handler shall delete a topic from the favourite list.
+// - The function shall accept a json data which contains a list of Topics that the user wishes to unmark from favourites.
+//
+// # Usage
+// - Call declared by the routing method addRoutes() URL with the GET-Method.
+// - Data: JSON Structure:
+//   - {"Topics":["<TOPIC-1>","<TOPIC-2>","<TOPIC-N>"]}
+//
+// # Returns
+// - 200 (OK): JSON
+//   - {"result":{<TOPIC-N>:{"Status":"Fine","Message":"Unmarked topic from favourite list"}}}
+// - 207 (Multi Status): JSON
+//   - {"result":{<TOPIC-N>:{"Status":"<STATUS-N>","Message":"<MESSAGE-N>"}}}
+// - 400 (Bad Request): JSON
+//   - {"badJson": "<const BADJSON>"}
+// - 401 (Unauthorized): JSON
+//   - {"Message": "Authenticate yourself first!"}
+//
+// # Author
+// - Polariusz
+func PostTopicFavouritesUnmark(serverState *ServerState) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if(serverState.userCreds.Ip == "") {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"Message": "Authenticate yourself first!",
+			})
+		}
+
+		var unmarkTopics TopicsWrapper
+
+		if err := c.BodyParser(&unmarkTopics); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"badJson": BADJSON,
+			})
+		}
+
+		topicResult := make(map[string]TopicResult)
+		atLeastOneBadTopic := false
+
+		for _, unmarkTopic := range unmarkTopics.Topics {
+			topicFound := false
+			for markedTopicIndex, markedTopic := range serverState.favouriteTopics {
+				if strings.Compare(unmarkTopic, markedTopic) == 0 {
+					topicFound = true
+					topicResult[unmarkTopic] = TopicResult{"Fine", "Unmarked topic from favourite list"}
+					serverState.favouriteTopics = append(serverState.favouriteTopics[:markedTopicIndex], serverState.favouriteTopics[markedTopicIndex+1:]...)
+					break;
+				}
+			}
+			if !topicFound {
+				atLeastOneBadTopic = true
+				topicResult[unmarkTopic] = TopicResult{"What", "The topics isn't on the favourite list"}
+			}
+		}
+
+		if atLeastOneBadTopic {
+			return c.Status(fiber.StatusMultiStatus).JSON(fiber.Map{
+				"result": topicResult,
+			})
+		}
+
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"result": topicResult,
+		})
+	}
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------|
+// | 2025-05-18     | Polariusz | Created |
+//
+// # Method-Type
+// - Handler
+//
+// # Description
+// - The fiber.Handler shall return favourite Topics.
+//
+// # Usage
+// - Call declared by the routing method addRoutes() URL with the GET-Method.
+//
+// # Returns
+// - 200 (OK): JSON
+//   - {"Topics":["<TOPIC-1>","<TOPIC-2>","<TOPIC-3>"]}
+// - 401 (Unauthorized): JSON
+//   - {"Message": "Authenticate yourself first!"}
+//
+// # Author
+// - Polariusz
+func GetTopicFavourites(serverState *ServerState) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if(serverState.userCreds.Ip == "") {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"Message": "Authenticate yourself first!",
+			})
+		}
+
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"Topics":serverState.favouriteTopics,
 		})
 	}
 }
