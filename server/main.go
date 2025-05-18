@@ -761,7 +761,7 @@ func GetTopicAllKnownHandler(serverState *ServerState) fiber.Handler {
 // # Returns
 // - 200 (Ok): JSON
 //   - {"Fine":"The MQTT-Client disconnected from <IP>:<PORT> Broker"}
-// - 401 (Unauthorized): JSON
+// - 400 (BadRequest): JSON
 //   - {"BadRequest":"The server isn't even connected to any MQTT-Brokers"}
 //
 // # Author
