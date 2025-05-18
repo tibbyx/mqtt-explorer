@@ -76,6 +76,24 @@ curl --request POST --header "Content-Type: application/json" --data '{"Ip" : "<
 }
 ```
 
+### To disconnect from the MQTT-Broker:
+
+```bash
+curl -X POST localhost:3000/disconnect
+```
+
+#### If the go-server wasn't connected to any MQTT-Broker, the server will return a 400 (Bad Request) with a JSON:
+{
+  "BadRequest": "The server isn't even connected to any MQTT-Brokers"
+}
+
+#### If everything went well, the server will return a 200 (OK) with a JSON:
+```javascript
+{
+  "fine" : "The MQTT-Client disconented from <IP>:<PORT> Broker"
+}
+```
+
 ### To subscribe to a topic or multiple at once:
 
 ```bash
@@ -204,8 +222,28 @@ _There is no need for anything to send._
   [
     "<TOPIC-1>",
     "<TOPIC-2>",
-    "<TOPIC-n>",
+    "<TOPIC-n>"
   ]
+}
+```
+
+### To get all known topics:
+
+```bash
+curl localhost:3000/topic/all-known
+```
+
+#### If the client is not authenticated yet, the server will return a 401 (Unauthorized) with a JSON:
+```javascript
+{
+  "Message": "Authenticate yourself first!"
+}
+```
+
+#### If everything went well, the server will return a 200 (OK) with a JSON:
+```javascript
+{
+  "Topics" : ["<TOPIC-1>", "<TOPIC-2>", "<TOPIC-N>"]
 }
 ```
 
@@ -235,6 +273,25 @@ curl --request POST --header "Content-Type: application/json" --data '{"Topic" :
   "goodJson" : "Message posted"
 }
 ```
+
+### To get the messages matched to a topic:
+
+```bash
+curl localhost:3000/topic/messages?topic=<TOPIC>
+```
+
+#### If the <TOPIC> is empty, the server will return a 400 (Bad Request) with a JSON:
+```javascript
+{
+  "error": "Missing topic query parameter"
+}
+```
+
+#### If everything went well, the server will return a 200 (OK) with a JSON:
+{
+  "topic": <TOPIC>,
+  "messages": [<MESSAGE-1>, <MESSAGE-2>, <MESSAGE-N>],
+}
 
 ### To check if the go server is still connected to the MQTT-Broker:
 
