@@ -83,9 +83,11 @@ curl -X POST localhost:3000/disconnect
 ```
 
 #### If the go-server wasn't connected to any MQTT-Broker, the server will return a 400 (Bad Request) with a JSON:
+```javascript
 {
   "BadRequest": "The server isn't even connected to any MQTT-Brokers"
 }
+```
 
 #### If everything went well, the server will return a 200 (OK) with a JSON:
 ```javascript
@@ -288,10 +290,12 @@ curl localhost:3000/topic/messages?topic=<TOPIC>
 ```
 
 #### If everything went well, the server will return a 200 (OK) with a JSON:
+```javascript
 {
   "topic": <TOPIC>,
   "messages": [<MESSAGE-1>, <MESSAGE-2>, <MESSAGE-N>],
 }
+```
 
 ### To check if the go server is still connected to the MQTT-Broker:
 
