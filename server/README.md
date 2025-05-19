@@ -305,20 +305,31 @@ _There is no need for anything to send._
 #### If the client has not log in with the credentials, the server will return a 401 (Unauthorized) with a JSON:
 ```javascript
 {
-  "401" : "You fool!"
+  "Unauthorized" : "Authenticate yourself first!"
 }
 ```
 
 #### If the go server does not retrieve a response from the MQTT-Broker, it will return a 503 (Service Unavailable) with a JSON:
 ```javascript
 {
-  "badMqtt" : "Big f!"
+  "ServiceUnavailable" : "The Credentials suggest that the server should be connected to a broker, but it isn't!",
+  "Ip":"<BROKER-IP>",
+  "Port":"<BROKER-PORT>",
+  "ClientId":"<CLIENT-ID>"
+}
+```
+_Note that the function will wipe the credentials from the state, meaning that the client needs to authenticate itself again._
+
+#### If the server is reconnecting to the Broker it will return a 200 (OK) with a JSON:
+```javascript
+{
+  "Fine" : "Reconnecting, but otherwise connected"
 }
 ```
 
 #### If everything went well, the server will return a 200 (OK) with a JSON:
 ```javascript
 {
-  "goodMqtt" : "pong"
+  "Ok" : "Connection is active"
 }
 ```
