@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"fmt"
 	"github.com/eclipse/paho.mqtt.golang"
 	"slices"
@@ -89,6 +90,12 @@ func (mc MqttCredentials) dump() {
 // - Polariusz
 func main() {
 	server := fiber.New()
+
+	server.Use(cors.New(cors.Config{
+        AllowOrigins: "http://localhost:5173",
+        AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+    }))
+
 	var serverState ServerState
 	serverState.receivedMessages = make(map[string][]string)
 

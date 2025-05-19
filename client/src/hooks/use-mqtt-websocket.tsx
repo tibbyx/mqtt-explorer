@@ -28,9 +28,11 @@ export function useMqttWebSocket({onConnect, searchQuery = ""}: MqttWebSocketOpt
             // Load some sample topics
             if (topics.length === 0) {
                 setTopics([
-                    {id: uuidv4(), name: "dominik", subscribed: true},
-                    {id: uuidv4(), name: "kevin", subscribed: false},
-                    {id: uuidv4(), name: "neeko", subscribed: true},
+                    {id: uuidv4(), name: "Brot", subscribed: true},
+                    {id: uuidv4(), name: "Golf", subscribed: true},
+                    {id: uuidv4(), name: "Espresso", subscribed: true},
+                    {id: uuidv4(), name: "Schule", subscribed: false},
+                    {id: uuidv4(), name: "Arbeit", subscribed: false},
                 ])
             }
         }, 1000)

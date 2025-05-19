@@ -13,3 +13,9 @@ export interface Message {
     qos: QoSLevel
     timestamp: string
 }
+
+export interface Credentials {
+    ip: string
+    port: string
+    clientId: string
+}
