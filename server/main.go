@@ -1,6 +1,8 @@
 package main
 
 import (
+	"database"
+
 	"github.com/gofiber/fiber/v2"
 	"fmt"
 	"github.com/eclipse/paho.mqtt.golang"
@@ -88,6 +90,11 @@ func (mc MqttCredentials) dump() {
 // # Author
 // - Polariusz
 func main() {
+	_, err := database.SetupDatabase()
+	if(err != nil) {
+		fmt.Println("WARN: Running without database")
+	}
+
 	server := fiber.New()
 	var serverState ServerState
 	serverState.receivedMessages = make(map[string][]string)
