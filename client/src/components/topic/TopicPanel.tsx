@@ -6,7 +6,7 @@ import {MessageSquare, Plus} from "lucide-react";
 import {ScrollArea} from "../ui/scroll-area";
 import type {Topic} from "@/lib/types.ts";
 import {ChevronDown} from "lucide-react";
-import {useTopics} from "@/api/hooks/useTopics";
+//import {useTopics} from "@/api/hooks/useTopics";
 
 interface TopicPanelProps {
     topics: Topic[];
@@ -37,7 +37,7 @@ export default function TopicPanel({
     const [editingName, setEditingName] = useState("");
     const [localTopics, setLocalTopics] = useState<Topic[]>([]);
     const [showTopics, setShowTopics] = useState(true);
-    const {fetchTopics /*topics*/, error, isLoading} = useTopics()
+    //const {fetchTopics /*topics*/, error, isLoading} = useTopics()
 
     useEffect(() => {
         setLocalTopics(topics);

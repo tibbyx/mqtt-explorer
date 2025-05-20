@@ -1,7 +1,7 @@
 import React, {useState, useRef, useEffect} from "react";
 import type {Message, QoSLevel, Topic} from "@/lib/types";
 import {NoTopicSelectedView} from "./NoTopicSelectedView";
-import {MessageTopicHeader} from "./MessageTopicHeader.tsx";
+import {MessageTopicHeader} from "./MessageTopicHeader";
 import {MessagesContainer} from "./MessageContainer";
 import {MessageComposer} from "./MessageComposer";
 
@@ -11,6 +11,7 @@ export interface MessagePanelProps {
     onPublish: (topic: string, payload: string, qos: QoSLevel) => void;
     onSubscribe?: (topicId: string) => void;
     onUnsubscribe?: (topicId: string) => void;
+    onCloseTopic: () => void;
 }
 
 export function MessagePanel({
@@ -19,6 +20,7 @@ export function MessagePanel({
                                  onPublish,
                                  onSubscribe,
                                  onUnsubscribe,
+                                 onCloseTopic,
                              }: MessagePanelProps) {
 
     const [messageText, setMessageText] = useState("");
@@ -78,6 +80,7 @@ export function MessagePanel({
                 onSubscriptionToggle={handleSubscriptionToggle}
                 filterQos={filterQos}
                 onFilterChange={handleQosFilterChange}
+                onCloseTopic={onCloseTopic}
             />
 
             <MessagesContainer

@@ -101,6 +101,7 @@ function MqttDashboard() {
                             onPublish={publishMessage}
                             onSubscribe={handleSubscribe}
                             onUnsubscribe={handleUnsubscribe}
+                            onCloseTopic={() => setSelectedTopic(null)}
                         />
                     ) : (
                         <div className="flex-1 flex items-center justify-center border-t">
