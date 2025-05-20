@@ -90,9 +90,12 @@ func (mc MqttCredentials) dump() {
 // # Author
 // - Polariusz
 func main() {
-	_, err := database.SetupDatabase()
-	if(err != nil) {
-		fmt.Println("WARN: Running without database")
+	con, err := database.OpenDatabase()
+	if err != nil {
+		fmt.Printf("WARN: Running without database\nErr:%s\n", err)
+	}
+	if err := database.SetupDatabase(con); err != nil {
+		fmt.Printf("WARN: Issue with setting db up!\nErr:%s\n", err)
 	}
 
 	server := fiber.New()
