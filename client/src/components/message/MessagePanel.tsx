@@ -12,6 +12,9 @@ export interface MessagePanelProps {
     onSubscribe?: (topicId: string) => void;
     onUnsubscribe?: (topicId: string) => void;
     onCloseTopic: () => void;
+    isSplitScreen: boolean;
+    onToggleSplitScreen: () => void;
+    className?: string;
 }
 
 export function MessagePanel({
@@ -21,6 +24,9 @@ export function MessagePanel({
                                  onSubscribe,
                                  onUnsubscribe,
                                  onCloseTopic,
+                                 isSplitScreen,
+                                 onToggleSplitScreen,
+                                 className,
                              }: MessagePanelProps) {
 
     const [messageText, setMessageText] = useState("");
@@ -29,6 +35,7 @@ export function MessagePanel({
     const [filterQos, setFilterQos] = useState<QoSLevel | null>(null);
     const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
+
 
     useEffect(() => {
         setIsSubscribed(topic?.subscribed ?? null);
@@ -73,7 +80,8 @@ export function MessagePanel({
     }
 
     return (
-        <div className="flex-1 flex flex-col h-full bg-gray-50 dark:bg-[var(--secondary-foreground)]">
+        <div
+            className={`flex-1 flex flex-col h-full bg-gray-50 dark:bg-[var(--secondary-foreground)] ${className ?? ""}`}>
             <MessageTopicHeader
                 topicName={topic.name}
                 isSubscribed={!!isSubscribed}
@@ -81,6 +89,8 @@ export function MessagePanel({
                 filterQos={filterQos}
                 onFilterChange={handleQosFilterChange}
                 onCloseTopic={onCloseTopic}
+                isSplitScreen={isSplitScreen}
+                onToggleSplitScreen={onToggleSplitScreen}
             />
 
             <MessagesContainer
