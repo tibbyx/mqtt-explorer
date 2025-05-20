@@ -584,10 +584,11 @@ func PostTopicSendMessageHandler(serverState *ServerState) fiber.Handler {
 	}
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Polariusz | Created       |
-// | 2025-05-13     | Polariusz | Documentation |
+// | Date of change | By        | Comment                |
+// +----------------+-----------+------------------------+
+// |                | Polariusz | Created                |
+// | 2025-05-13     | Polariusz | Documentation          |
+// | 2025-05-19     | Polariusz | Updated ping behaviour |
 //
 // # Method-Type
 // - Handler
@@ -596,7 +597,9 @@ func PostTopicSendMessageHandler(serverState *ServerState) fiber.Handler {
 // - The method shall be a handler that allows to check if the go-server is connected to the MQTT-Broker.
 // - The method shall ignore any data being sent to the server, be it a json or any byte array.
 // - The method shall return 200 (Ok) if the go-server is connected to the MQTT-Broker
-// - The method shall return 501 (Service Unavailable) if the MQTT-Broker does not respond back.
+// - The method shall return 200 (Ok) if the go-server is reconnecting to the MQTT-Broker
+// - The method shall return 401 (Unauthorized) if the client never authenticated.
+// - The method shall return 503 (Service Unavailable) if the MQTT-Broker does not respond back.
 //
 // # Usage
 // - Call declared by the routing method addRoutes() URL with the GET-Method.
@@ -604,13 +607,15 @@ func PostTopicSendMessageHandler(serverState *ServerState) fiber.Handler {
 // # Returns
 // - 200 (Ok): JSON
 //   - MQTT-Broker responded, signifying that the connection to the Broker exists.
-//   - {"goodMqtt":"pong"}
+//     - {"OK":"Connection is active"}
+//   - Paho is trying to reconnect to the MQTT-Broker, which should be fine
+//     - {"Fine", "Reconnecting, but otherwise connected"}
 // - 401 (Unauthorized): JSON
 //   - The go server was never connected to the MQTT-Broker.
-//   - {"401":"You fool!"}
+//   - {"Unauthorized":"Authenticate yourself first!"}
 // - 503 (Service Unavailable): JSON
 //   - The connection to the MQTT-Broker was severed.
-//   - {"badMqtt":"Big f!"}
+//   - {"ServiceUnavailable":"The Credentials suggest that the server should be connected to a broker, but it isn't!","Ip":"<BROKER-IP>","Port":"<BROKER-PORT>","ClientId":"<CLIENT-ID>"}
 //
 // # Author
 // - Polariusz
@@ -618,19 +623,36 @@ func GetPingHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if serverState.userCreds.Ip == "" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				// TODO: Explain the message a bit more
-				"401": "You fool!",
+				"Unauthorized": "Authenticate yourself first!",
 			})
 		}
 
-		if token := serverState.mqttClient.Publish("ping", 0, false, '0'); token.Wait() && token.Error() != nil {
+		// Is it connected?
+		if serverState.mqttClient.IsConnected() {
+			// Is it really connected? (i.e not reconnecting)
+			if serverState.mqttClient.IsConnectionOpen() {
+				return c.Status(fiber.StatusOK).JSON(fiber.Map{
+					"Ok": "Connection is active",
+				})
+			} else {
+				// It is reconnecting
+				return c.Status(fiber.StatusOK).JSON(fiber.Map{
+					"Fine": "Reconnecting, but otherwise connected",
+				})
+			}
+		} else {
+			// It is not connected
+			Ip := serverState.userCreds.Ip; serverState.userCreds.Ip = ""
+			Port := serverState.userCreds.Port; serverState.userCreds.Port = ""
+			ClientId := serverState.userCreds.ClientId; serverState.userCreds.ClientId = ""
+
 			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
-				"badMqtt": "Big f!",
+				"ServiceUnavailable": "The Credentials suggest that the server should be connected to a broker, but it isn't!",
+				"Ip": Ip,
+				"Port": Port,
+				"ClientId": ClientId,
 			})
 		}
-			return c.Status(fiber.StatusOK).JSON(fiber.Map{
-				"goodMqtt": "pong",
-			})
 	}
 }
 
