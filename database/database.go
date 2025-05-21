@@ -18,10 +18,60 @@ func OpenDatabase() (*sql.DB, error) {
 }
 
 func SetupDatabase(con *sql.DB) error {
-	_, err := con.Exec("CREATE TABLE IF NOT EXISTS Broker(ID INTEGER PRIMARY KEY AUTOINCREMENT,Ip string NOT NULL,Port INTEGER NOT NULL, CreationDate DATETIME NOT NULL)")
-	if err != nil {
-		return errors.New(fmt.Sprintf("Skill issues\nErr: %s\n", err))
+	queries := []string{
+		`CREATE TABLE IF NOT EXISTS Broker (
+			ID INTEGER PRIMARY KEY AUTOINCREMENT,
+			Ip TEXT NOT NULL,
+			Port INTEGER NOT NULL,
+			CreationDate DATETIME NOT NULL
+		);`,
+
+		`CREATE TABLE IF NOT EXISTS User (
+			ID INTEGER PRIMARY KEY AUTOINCREMENT,
+			BrokerId INTEGER NOT NULL,
+			ClientId INTEGER NOT NULL,
+			Username TEXT NOT NULL,
+			Password TEXT,
+			Outsider BOOLEAN,
+			CreationDate DATETIME NOT NULL,
+			FOREIGN KEY(BrokerId) REFERENCES Broker(ID)
+		);`,
+
+		`CREATE TABLE IF NOT EXISTS Message (
+			ID INTEGER PRIMARY KEY AUTOINCREMENT,
+			UserId INTEGER NOT NULL,
+			TopicId INTEGER NOT NULL,
+			QoS TINYINT,
+			Date INTEGER,
+			Message TEXT,
+			FOREIGN KEY(UserId) REFERENCES User(ID),
+			FOREIGN KEY(TopicId) REFERENCES Topic(ID)
+		);`,
+		`CREATE TABLE IF NOT EXISTS Topic (
+             ID INTEGER PRIMARY KEY AUTOINCREMENT,
+             UserId INTEGER NOT NULL,
+             Subscribed BOOLEAN,
+             Date INTEGER,
+             Topic TEXT NOT NULL,
+             FOREIGN KEY(UserId) REFERENCES User(ID)
+         );`,
+
+         `CREATE TABLE IF NOT EXISTS UserTopicFavourite (
+             UserId INTEGER NOT NULL,
+             TopicId INTEGER NOT NULL,
+             Date INTEGER,
+             PRIMARY KEY(UserId, TopicId),
+             FOREIGN KEY(UserId) REFERENCES User(ID),
+             FOREIGN KEY(TopicId) REFERENCES Topic(ID)
+         );`,
 	}
-	// continue...
+
+	for _, query := range queries {
+		if _, err := con.Exec(query); err != nil {
+			return fmt.Errorf("Skill issues\nErr: %s\n")
+		}
+    }
+
+
 	return nil
 }
