@@ -110,8 +110,7 @@ func SetupDatabase(con *sql.DB) error {
 // |                        | CreationDate DateTime |
 //
 // # Used in
-// - InsertNewBroker()
-// - SelectBrokerByIpAndPort()
+// - SelectBrokerList()
 //
 // # Author
 // - Polariusz
@@ -171,7 +170,6 @@ func InsertNewBroker(con *sql.DB, broker InsertBroker) error {
 //
 // # Used in
 // - SelectBrokerList()
-// - SelectBrokerByIpAndPort()
 //
 // # Author
 // - Polariusz
@@ -221,55 +219,4 @@ func SelectBrokerList(con *sql.DB) ([]SelectBroker, error) {
 	}
 
 	return brokerList, nil
-}
-
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-22     | Polariusz | Created |
-// 
-// # Arguments
-// - con *sql.DB        : It's a connection to the database that is used here to insert stuff in.
-// - broker InsertBroker: Used to match a row from table Broker
-// 
-// # Description
-// - The function shall return a matching to the argument `broker` full row from table Broker from connected to database argument `con`.
-// - The function shall therefore allow for quering the Id of the table Broker if the Ip and Port are known.
-// 
-// # Tables Affected
-// - Broker
-//   - SELECT
-// 
-// # Returns
-// - SelectBroker struct matched to the argument `broker`
-// - error when a duplicate is present. This should never happen as long as the function `InsertNewBroker()` is used to insert the Brokers.
-// 
-// # Author
-// - Polariusz
-func SelectBrokerByIpAndPort(con *sql.DB, broker InsertBroker) (SelectBroker, error) {
-	var fullBroker SelectBroker
-
-	stmt, err := con.Prepare("SELECT * FROM BROKER WHERE Ip = ? AND Port = ?")
-	if err != nil {
-		return fullBroker, fmt.Errorf("Skill issues\nErr: %s\n", err)
-	}
-
-	rows, err := stmt.Query(broker.Ip, broker.Port)
-	if err != nil {
-		return fullBroker, fmt.Errorf("Skill issues\nErr: %s\n", err)
-	}
-
-	rows.Next()
-	var Id int
-	var Ip string
-	var Port int
-	var CreationDate time.Time
-	rows.Scan(&Id, &Ip, &Port, &CreationDate)
-	fullBroker = SelectBroker{Id, Ip, Port, CreationDate}
-
-	if rows.Next() {
-		// Duplicate detected!
-		return fullBroker, fmt.Errorf("Error: Duplicate at table Broker! Args in: %s:%d", broker.Ip, broker.Port)
-	}
-
-	return fullBroker, nil
 }
