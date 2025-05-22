@@ -273,3 +273,67 @@ func SelectBrokerByIpAndPort(con *sql.DB, broker InsertBroker) (SelectBroker, er
 
 	return fullBroker, nil
 }
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-22     | Polariusz | Created |
+//
+// # Struct to Table Mapping
+//
+// | Struct InsertUser      | Table User            |
+// +------------------------+-----------------------+
+// |                        | ID INTEGER            |
+// | BrokerId string        | BrokerId INTEGER      |
+// | ClientId string        | ClientId TEXT         |
+// | Username string        | Username TEXT         |
+// | Password string        | Password TEXT         |
+// | Outsider bool          | Outsider BOOLEAN      |
+// |                        | CreationDate DATETIME |
+//
+// # Used in
+// - InsertNewUser()
+//
+// # Author
+// - Polariusz
+type InsertUser struct {
+	BrokerId int
+	ClientId string
+	Username string
+	Password string
+	Outsider bool
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-21     | Polariusz | Created |
+//
+// # Arguments
+// - con *sql.DB     : It's a connection to the database that is used here to insert stuff in.
+// - user InsertUser : It's inserted to the table `User`
+//
+// # Description
+// - The function shall insert the argument `user` with the current date into table User from connected to database argument `con`.
+//
+// # Tables Affected
+// - User
+//   - INSERT
+//
+// # Returns
+// - Can return error if the con isn't connected or if it doesn't have table User. In this case, please use functions `OpenDatabase()` and `SetupDatabase()` to set-up the database.
+//
+// # Author
+// - Polariusz
+func InsertNewUser(con *sql.DB, user InsertUser) error {
+	stmt, err := con.Prepare(`
+	INSERT INTO User(BrokerId, ClientId, Username, Password, Outsider, CreationDate) VALUES (?, ?, ?, ?, ?, ?)
+	`);
+	if err != nil {
+		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	if _, err := stmt.Exec(user.BrokerId, user.ClientId, user.Username, user.Password, user.Outsider, time.Now()); err != nil {
+		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	return nil
+}
