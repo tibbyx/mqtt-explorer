@@ -243,18 +243,18 @@ func SelectBrokerList(con *sql.DB) ([]SelectBroker, error) {
 // 
 // # Author
 // - Polariusz
-func SelectBrokerByIpAndPort(con *sql.DB, broker InsertBroker) SelectBroker, error {
+func SelectBrokerByIpAndPort(con *sql.DB, broker InsertBroker) (SelectBroker, error) {
+	var fullBroker SelectBroker
+
 	stmt, err := con.Prepare("SELECT * FROM BROKER WHERE Ip = ? AND Port = ?")
 	if err != nil {
-		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
+		return fullBroker, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
-	rows, err := stmt.Exec(broker.Ip, broker.Port)
+	rows, err := stmt.Query(broker.Ip, broker.Port)
 	if err != nil {
-		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+		return fullBroker, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
-
-	var broker SelectBroker
 
 	rows.Next()
 	var Id int
@@ -262,12 +262,12 @@ func SelectBrokerByIpAndPort(con *sql.DB, broker InsertBroker) SelectBroker, err
 	var Port int
 	var CreationDate time.Time
 	rows.Scan(&Id, &Ip, &Port, &CreationDate)
-	broker = {Id, Ip, Port, CreationDate}
+	fullBroker = SelectBroker{Id, Ip, Port, CreationDate}
 
 	if rows.Next() {
 		// Duplicate detected!
-		return nil, fmt.Errorf("Error: Duplicate at table Broker! Args in: %s:%d", broker.Ip, broker.Port)
+		return fullBroker, fmt.Errorf("Error: Duplicate at table Broker! Args in: %s:%d", broker.Ip, broker.Port)
 	}
 
-	return broker, nil
+	return fullBroker, nil
 }
