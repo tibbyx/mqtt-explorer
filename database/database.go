@@ -110,7 +110,8 @@ func SetupDatabase(con *sql.DB) error {
 // |                        | CreationDate DateTime |
 //
 // # Used in
-// - SelectBrokerList()
+// - InsertNewBroker()
+// - SelectBrokerByIpAndPort()
 //
 // # Author
 // - Polariusz
@@ -170,6 +171,7 @@ func InsertNewBroker(con *sql.DB, broker InsertBroker) error {
 //
 // # Used in
 // - SelectBrokerList()
+// - SelectBrokerByIpAndPort()
 //
 // # Author
 // - Polariusz
@@ -223,7 +225,7 @@ func SelectBrokerList(con *sql.DB) ([]SelectBroker, error) {
 
 // | Date of change | By        | Comment |
 // +----------------+-----------+---------+
-// | 2025-05-21     | Polariusz | Created |
+// | 2025-05-22     | Polariusz | Created |
 // 
 // # Arguments
 // - con *sql.DB        : It's a connection to the database that is used here to insert stuff in.
