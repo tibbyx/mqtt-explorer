@@ -356,6 +356,7 @@ func InsertNewUser(con *sql.DB, user InsertUser) error {
 //
 // # Used in
 // - SelectUserById()
+// - SelectUsersByClientId()
 //
 // # Author
 // - Polariusz
@@ -374,7 +375,7 @@ type SelectUser struct {
 //
 // # Arguments
 // - con *sql.DB : It's a connection to the database that is used here to insert stuff in.
-// - Id int      : Unique Identifier of an User.
+// - id int      : Unique Identifier of an User.
 //
 // # Description
 // - The function shall query the database to return matched to argument `id` row from table User with a `SelectUser` struct.
@@ -428,7 +429,7 @@ func SelectUserById(con *sql.DB, id int) (SelectUser, error) {
 // - ClientId string : Unique Identifier of an User.
 //
 // # Description
-// - The function shall query the database to return matched to argument `clientId` row from table User with a `SelectUser` struct.
+// - The function shall query the database to return matched to argument `clientId` row from table User with a `[]SelectUser` array of structs.
 //
 // # Tables Affected
 // - User
