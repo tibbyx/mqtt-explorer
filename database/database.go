@@ -61,11 +61,13 @@ func SetupDatabase(con *sql.DB) error {
 			ID INTEGER PRIMARY KEY AUTOINCREMENT,
 			UserId INTEGER NOT NULL,
 			TopicId INTEGER NOT NULL,
+			BrokerId INTEGER NOT NULL,
 			QoS TINYINT,
 			Message TEXT,
 			CreationDate DATETIME,
 			FOREIGN KEY(UserId) REFERENCES User(ID),
-			FOREIGN KEY(TopicId) REFERENCES Topic(ID)
+			FOREIGN KEY(TopicId) REFERENCES Topic(ID),
+			FOREIGN KEY(BrokerId) REFERENCES Broker(ID)
 		);`,
 
 		`CREATE TABLE IF NOT EXISTS Topic (
