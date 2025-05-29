@@ -62,8 +62,8 @@ func SetupDatabase(con *sql.DB) error {
 			UserId INTEGER NOT NULL,
 			TopicId INTEGER NOT NULL,
 			QoS TINYINT,
-			Date INTEGER,
 			Message TEXT,
+			CreationDate DATETIME,
 			FOREIGN KEY(UserId) REFERENCES User(ID),
 			FOREIGN KEY(TopicId) REFERENCES Topic(ID)
 		);`,
