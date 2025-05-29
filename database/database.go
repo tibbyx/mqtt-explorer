@@ -8,6 +8,7 @@ import (
 )
 
 const databaseName string = "mqtt-client-database.db"
+const LIMIT_MESSAGES int = 500
 
 // | Date of change | By        | Comment |
 // +----------------+-----------+---------+
@@ -283,7 +284,7 @@ func InsertNewMessage(con *sql.DB, message InsertMessage) error {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
-	if _, err := stmt.Exec(message.UserId, message.TopicId, message.BrokerId, message.Qos, message.Message, time.Now()); err != nil {
+	if _, err := stmt.Exec(message.UserId, message.TopicId, message.BrokerId, message.QoS, message.Message, time.Now()); err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
@@ -308,6 +309,7 @@ func InsertNewMessage(con *sql.DB, message InsertMessage) error {
 //
 // # Used in
 // - SelectMessagesByTopicIdAndBrokerId()
+// - SelectMessagesByTopicIdBrokerIdAndIndex()
 //
 // # Author
 // - Polariusz
@@ -321,7 +323,35 @@ type SelectMessage struct {
 	CreationDate time.Time
 }
 
-func SelectMessagesByTopicIdAndBrokerId(con *sql.DB, topicId int, brokerId int) ([]SelectMessage, nil) {
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-29     | Polariusz | Created |
+//
+// # Arguments
+// - con *sql.DB  : It's a connection to the database.
+// - topicId int  : Unique Identifier of table Topic
+// - brokerId int : Unique Identifier of table Broker
+//
+// # Description
+// - Selects a list of messages from table Message matched to arguments `topicId` for messages in a Topic and `brokerId` for messages in a broker.
+// - It selects all rows.
+//
+// # Tables Affected
+// - Message
+//   - SELECT
+//
+// # Returns
+// - A list of struct `SelectMessage`
+// - error when:
+//   - Skill Issues
+//   - Table Message does not exist
+//     - Run SetupDatabase() before this function.
+//
+// # Author
+// - Polariusz
+func SelectMessagesByTopicIdAndBrokerId(con *sql.DB, topicId int, brokerId int) ([]SelectMessage, error) {
+	var selectMessageList []SelectMessage
+
 	stmt, err := con.Prepare(`
 		SELECT *
 		FROM Message
@@ -334,5 +364,76 @@ func SelectMessagesByTopicIdAndBrokerId(con *sql.DB, topicId int, brokerId int) 
 		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
-	return nil, nil
+	rows, err := stmt.Query(topicId, brokerId)
+	if err != nil {
+		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	for rows.Next() {
+		var selectMessage SelectMessage
+		rows.Scan(selectMessage.Id, selectMessage.UserId, selectMessage.TopicId, selectMessage.BrokerId, selectMessage.QoS, selectMessage.Message, selectMessage.CreationDate)
+		selectMessageList = append(selectMessageList, selectMessage)
+	}
+
+	return selectMessageList, nil
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-29     | Polariusz | Created |
+//
+// # Arguments
+// - con *sql.DB  : It's a connection to the database.
+// - topicId int  : Unique Identifier of table Topic
+// - brokerId int : Unique Identifier of table Broker
+// - index int    : Select from `LIMIT_MESSAGES*index` to `LIMIT_MESSAGES*(1+index)` messages.
+//
+// # Description
+// - The function shall select matched to arguments `` for matching to Topic, `` for matching to Broker and `` for limiting messages Messages from table `Message` by a connected to `con` Database.
+// - It selects up to `LIMIT_MESSAGES` Messages
+//
+// # Tables Affected
+// - Message
+//   - SELECT
+//
+// # Returns
+// - A list of struct `SelectMessage`
+// - error when:
+//   - Skill Issues
+//   - Table Message does not exist
+//     - Run SetupDatabase() before this function.
+//
+// # Author
+// - Polariusz
+func SelectMessagesByTopicIdBrokerIdAndIndex(con *sql.DB, topicId int, brokerId int, index int) ([]SelectMessage, error) {
+	var selectMessageList []SelectMessage
+
+	stmt, err := con.Prepare(`
+		SELECT *
+		FROM Message
+		WHERE
+		  TopicId = ?
+		AND
+		  BrokerId = ?
+		AND
+		  ID <= (SELECT MAX(ID) - (? * ?) FROM Message)
+		AND
+		  ID > (SELECT MAX(ID) - ((1+?) * ?) FROM Message)
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	rows, err := stmt.Query(topicId, brokerId, index, LIMIT_MESSAGES, index, LIMIT_MESSAGES)
+	if err != nil {
+		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	for rows.Next() {
+		var selectMessage SelectMessage
+		rows.Scan(selectMessage.Id, selectMessage.UserId, selectMessage.TopicId, selectMessage.BrokerId, selectMessage.QoS, selectMessage.Message, selectMessage.CreationDate)
+		selectMessageList = append(selectMessageList, selectMessage)
+	}
+
+	return selectMessageList, nil
 }
