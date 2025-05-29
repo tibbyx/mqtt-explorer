@@ -221,7 +221,6 @@ func SelectBrokerList(con *sql.DB) ([]SelectBroker, error) {
 	return brokerList, nil
 }
 
-
 // | Date of change | By        | Comment |
 // +----------------+-----------+---------+
 // | 2025-05-29     | Polariusz | Created |
@@ -233,6 +232,7 @@ func SelectBrokerList(con *sql.DB) ([]SelectBroker, error) {
 // |                        | ID INTEGER            |
 // | UserId int             | UserId INTEGER        |
 // | TopicId int            | TopicId INTEGER       |
+// | BrokerId int           | BrokerId INTEGER      |
 // | QoS int                | QoS TINYINT           |
 // | Message string         | Message TEXT          |
 // |                        | CreationDate DateTime |
@@ -245,10 +245,94 @@ func SelectBrokerList(con *sql.DB) ([]SelectBroker, error) {
 type InsertMessage struct {
 	UserId int
 	TopicId int
+	BrokerId int
 	QoS int
 	Message string
 }
 
-func InsertNewMessage(con *sql.DB, message InsertMessage) {
-	return
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-29     | Polariusz | Created |
+//
+// # Arguments
+// - con *sql.DB           : It's a connection to the database that is used here to insert stuff in.
+// - message InsertMessage : The struct that will be written into table `Message`.
+//
+// # Description
+// - The function shall insert the argument `message` with the current date into table Message from connected to database argument `con`.
+//
+// # Tables Affected
+// - Message
+//   - INSERT
+//
+// # Returns
+// - error when:
+//   - Skill Issues
+//   - Table Message does not exist
+//     - Run SetupDatabase() before this function.
+//   - Foreign Key issues
+//
+// # Author
+// - Polariusz
+func InsertNewMessage(con *sql.DB, message InsertMessage) error {
+	stmt, err := con.Prepare(`
+		INSERT INTO Message(UserId, TopicId, BrokerId, QoS, Message, CreationDate)
+		VALUES(?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	if _, err := stmt.Exec(message.UserId, message.TopicId, message.BrokerId, message.Qos, message.Message, time.Now()); err != nil {
+		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	return nil
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-29     | Polariusz | Created |
+//
+// # Struct to Table Message
+//
+// | Struct SelectMessage   | Table Message         |
+// +------------------------+-----------------------+
+// | Id int                 | ID INTEGER            |
+// | UserId int             | UserId INTEGER        |
+// | TopicId int            | TopicId INTEGER       |
+// | BrokerId int           | BrokerId INTEGER      |
+// | QoS int                | QoS TINYINT           |
+// | Message string         | Message TEXT          |
+// | CreationDate time.Time | CreationDate DateTime |
+//
+// # Used in
+// - SelectMessagesByTopicIdAndBrokerId()
+//
+// # Author
+// - Polariusz
+type SelectMessage struct {
+	Id int
+	UserId int
+	TopicId int
+	BrokerId int
+	QoS int
+	Message string
+	CreationDate time.Time
+}
+
+func SelectMessagesByTopicIdAndBrokerId(con *sql.DB, topicId int, brokerId int) ([]SelectMessage, nil) {
+	stmt, err := con.Prepare(`
+		SELECT *
+		FROM Message
+		WHERE
+		  TopicId = ?
+		AND
+		  BrokerId = ?
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	return nil, nil
 }
