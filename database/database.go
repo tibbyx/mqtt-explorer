@@ -220,3 +220,35 @@ func SelectBrokerList(con *sql.DB) ([]SelectBroker, error) {
 
 	return brokerList, nil
 }
+
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-29     | Polariusz | Created |
+//
+// # Struct to Table Message
+//
+// | Struct InsertMessage   | Table Message         |
+// +------------------------+-----------------------+
+// |                        | ID INTEGER            |
+// | UserId int             | UserId INTEGER        |
+// | TopicId int            | TopicId INTEGER       |
+// | QoS int                | QoS TINYINT           |
+// | Message string         | Message TEXT          |
+// |                        | CreationDate DateTime |
+//
+// # Used in
+// - InsertNewMessage()
+//
+// # Author
+// - Polariusz
+type InsertMessage struct {
+	UserId int
+	TopicId int
+	QoS int
+	Message string
+}
+
+func InsertNewMessage(con *sql.DB, message InsertMessage) {
+	return
+}
