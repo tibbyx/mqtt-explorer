@@ -220,3 +220,81 @@ func SelectBrokerList(con *sql.DB) ([]SelectBroker, error) {
 
 	return brokerList, nil
 }
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-29     | Polariusz | Created |
+//
+// # Struct to Table Mapping
+//
+// | Struct InsertTopic     | Table Topic           |
+// +------------------------+-----------------------+
+// |                        | ID INTEGER            |
+// | UserId int             | UserId INTEGER        |
+// | BrokerId int           | BrokerId INTEGER      |
+// | Subscribed bool        | Subscribed BOOLEAN    |
+// | Topic string           | Topic TEXT            |
+// |                        | CreationDate DATETIME |
+//
+// # Used in
+// - InsertNewTopic()
+//
+// # Author
+// - Polariusz
+type InsertTopic struct {
+	UserId int
+	BrokerId int
+	Subscribed bool
+	Topic string
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-29     | Polariusz | Created |
+//
+// # Arguments
+// - con *sql.DB       : It's a connection to the database that is used here to insert stuff in.
+// - topic InsertTopic : Will be inserted into table `Topic`.
+//
+// # Description
+// - The function shall insert the argument `topic` into table `Topic`.
+// - The functino shall only insert unique argument `topic`.
+//
+// # Tables Affected
+// - Topic
+//   - INSERT
+//     - SELECT (SUBQUERY)
+//
+// # Returns
+// - error when:
+//   - Skill Issues
+//   - Table Topic does not exists
+//     - Use the `SetupDatabase()` function to set the database up before calling this function.
+//   - Foreign Key issues
+//
+// # Author
+// - Polariusz
+func InsertNewTopic(con *sql.DB, topic InsertTopic) error {
+	stmt, err := con.Prepare(`
+		INSERT INTO Topic(UserId, BrokerId, Subscribed, Topic, CreationDate)
+		Select ?, ?, ?, ?, ? WHERE NOT EXISTS(
+			SELECT 1
+			FROM Topic
+			WHERE
+				UserId = ?
+			AND
+				BrokerID = ?
+			AND
+				Topic = ?
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	if _, err := stmt.Exec(topic.UserId, topic.BrokerId, topic.Subscribed, topic.Topic, time.Now()); err != nil {
+		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	return nil
+}
