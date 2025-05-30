@@ -323,9 +323,10 @@ type SelectMessage struct {
 	CreationDate time.Time
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-29     | Polariusz | Created |
+// | Date of change | By        | Comment                         |
+// +----------------+-----------+---------------------------------+
+// | 2025-05-29     | Polariusz | Created                         |
+// | 2025-05-30     | Polariusz | Fixed references in rows.Scan() |
 //
 // # Arguments
 // - con *sql.DB  : It's a connection to the database.
@@ -371,16 +372,17 @@ func SelectMessagesByTopicIdAndBrokerId(con *sql.DB, topicId int, brokerId int) 
 
 	for rows.Next() {
 		var selectMessage SelectMessage
-		rows.Scan(selectMessage.Id, selectMessage.UserId, selectMessage.TopicId, selectMessage.BrokerId, selectMessage.QoS, selectMessage.Message, selectMessage.CreationDate)
+		rows.Scan(&selectMessage.Id, &selectMessage.UserId, &selectMessage.TopicId, &selectMessage.BrokerId, &selectMessage.QoS, &selectMessage.Message, &selectMessage.CreationDate)
 		selectMessageList = append(selectMessageList, selectMessage)
 	}
 
 	return selectMessageList, nil
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-29     | Polariusz | Created |
+// | Date of change | By        | Comment                                                                                    |
+// +----------------+-----------+--------------------------------------------------------------------------------------------+
+// | 2025-05-29     | Polariusz | Created                                                                                    |
+// | 2025-05-30     | Polariusz | Fixed references in rows.Scan() and changed the statement to use the ROW_NUMBER() function |
 //
 // # Arguments
 // - con *sql.DB  : It's a connection to the database.
@@ -407,31 +409,35 @@ func SelectMessagesByTopicIdAndBrokerId(con *sql.DB, topicId int, brokerId int) 
 // - Polariusz
 func SelectMessagesByTopicIdBrokerIdAndIndex(con *sql.DB, topicId int, brokerId int, index int) ([]SelectMessage, error) {
 	var selectMessageList []SelectMessage
-
-	stmt, err := con.Prepare(`
-		SELECT *
-		FROM Message
+	stmtStr := `
+		SELECT ID, UserId, TopicId, BrokerId, QoS, Message, CreationDate
+		FROM (
+			ROW_NUMBER() OVER(ORDER BY ID) as RowCnt, ID, UserId, TopicId, BrokerId, QoS, Message, CreationDate
+			FROM MESSAGE
+			WHERE
+				TopicId = ?
+			AND
+				BrokerId = ?
+		) MsgWithCnt
 		WHERE
-		  TopicId = ?
+			RowCnt > ? * ?
 		AND
-		  BrokerId = ?
-		AND
-		  ID <= (SELECT MAX(ID) - (? * ?) FROM Message)
-		AND
-		  ID > (SELECT MAX(ID) - ((1+?) * ?) FROM Message)
-	`)
+			RowCnt <= (1+?) * ?
+	`
+
+	stmt, err := con.Prepare(stmtStr)
 	if err != nil {
-		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
+		return nil, fmt.Errorf("Error while preparing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
 
 	rows, err := stmt.Query(topicId, brokerId, index, LIMIT_MESSAGES, index, LIMIT_MESSAGES)
 	if err != nil {
-		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
+		return nil, fmt.Errorf("Error while querying the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
 
 	for rows.Next() {
 		var selectMessage SelectMessage
-		rows.Scan(selectMessage.Id, selectMessage.UserId, selectMessage.TopicId, selectMessage.BrokerId, selectMessage.QoS, selectMessage.Message, selectMessage.CreationDate)
+		rows.Scan(&selectMessage.Id, &selectMessage.UserId, &selectMessage.TopicId, &selectMessage.BrokerId, &selectMessage.QoS, &selectMessage.Message, &selectMessage.CreationDate)
 		selectMessageList = append(selectMessageList, selectMessage)
 	}
 
