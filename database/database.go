@@ -78,9 +78,10 @@ func SetupDatabase(con *sql.DB) error {
 		);`,
 
 		`CREATE TABLE IF NOT EXISTS UserTopicFavourite (
+			ID INTEGER PRIMARY KEY AUTOINCREMENT,
 			UserId INTEGER NOT NULL,
 			TopicId INTEGER NOT NULL,
-			Date INTEGER,
+			CreationDate DATETIME,
 			PRIMARY KEY(UserId, TopicId),
 			FOREIGN KEY(UserId) REFERENCES User(ID),
 			FOREIGN KEY(TopicId) REFERENCES Topic(ID)
