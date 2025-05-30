@@ -220,3 +220,168 @@ func SelectBrokerList(con *sql.DB) ([]SelectBroker, error) {
 
 	return brokerList, nil
 }
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-30     | Polariusz | Created |
+//
+// # Struct to Table Mapping
+//
+// | Struct SelectFavTopic  | Table UserTopicFavourite | Table User | Table Topic |
+// +------------------------+--------------------------+------------+-------------+
+// | Id int                 | ID INTEGER               |            |             |
+// | UserId int             | UserId INTEGER           | ID INTEGER |             |
+// | TopicId int            | TopicId INTEGER          |            | ID INTEGER  |
+// | Topic string           |                          |            | Topic TEXT  |
+// | CreationDate time.Time | CreationDate DATETIME    |            |             |
+//
+// # Used in
+// - SelectFavouriteTopicsByUserId()
+//
+// # Author
+// - Polariusz
+type SelectFavTopic struct {
+	Id int
+	UserId int
+	TopicId int
+	Topic string
+	CreationDate time.Time
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-30     | Polariusz | Created |
+//
+// # Arguments
+// - con *sql.DB : It's a connection to the database.
+// - userId int  : [User].[ID]
+//
+// # Description
+// - The function shall return a list of favourite topics matched with argument `userId` with a `SelectFavTopic` struct array.
+//
+// # Tables Affected
+// - UserTopicFavourite
+//   - SELECT
+//
+// # Returns
+// - An array of SelectFavTopic structs that match the argument `userId`
+// - error when:
+//   - Skill Issues
+//   - Table UserTopicFavourite or Table Topic does not exist
+//     - Please run the function `SetupDatabase()` before using the database.
+//
+// # Author
+// - Polariusz
+func SelectFavouriteTopicsByUserId(con *sql.DB, userId int) ([]SelectFavTopic, error) {
+	var favTopicList []SelectFavTopic
+
+	stmtStr := `
+		SELECT utf.Id, utf.UserId, utf.TopicId, t.Topic, utf.CreationDate
+		FROM UserTopicFavourite utf
+		INNER JOIN Topic t
+		ON t.ID = utf.TopicId
+		WHERE utf.UserId = ?
+	`
+	stmt, err := con.Prepare(stmtStr)
+	if err != nil {
+		return nil, fmt.Errorf("Error while preparing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
+	}
+
+	rows, err := stmt.Query(userId)
+	if err != nil {
+		return nil, fmt.Errorf("Error while querying the database!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
+	}
+
+	for rows.Next() {
+		var favTopic SelectFavTopic
+		rows.Scan(&favTopic.Id, &favTopic.UserId, &favTopic.TopicId, &favTopic.Topic, &favTopic.CreationDate)
+		favTopicList = append(favTopicList, favTopic)
+	}
+
+	return favTopicList, nil
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-30     | Polariusz | Created |
+//
+// # Arguments
+// - con *sql.DB : It's a connection to the database.
+// - userId int  : [User].[ID]
+// - topicId int : [Topic].[ID]
+//
+// # Description
+// - The function shall insert the arguments `userId` and `topicId` into the table `UserTopicFavourite`.
+//
+// # Tables Affected
+// - UserTopicFavourite
+//   - INSERT
+//
+// # Returns
+// - error when:
+//   - Skill Issues
+//   - Table UserTopicFavourite does not exist
+//     - Please run the function `SetupDatabase()` before using the database.
+//
+// # Author
+// - Polariusz
+func InsertFavouriteTopic(con *sql.DB, userId int, topicId int) error {
+	stmtStr := `
+		INSERT INTO UserTopicFavourite(UserId, TopicId, CreationDate)
+		VALUES(?, ?, ?)
+	`
+
+	stmt, err := con.Prepare(stmtStr)
+	if err != nil {
+		return fmt.Errorf("Error while preparing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
+	}
+
+	if _, err := stmt.Exec(userId); err != nil {
+		return fmt.Errorf("Error while executing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
+	}
+
+	return nil
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-30     | Polariusz | Created |
+//
+// # Arguments
+// - con *sql.DB : It's a connection to the database.
+// - userId int  : [User].[ID]
+// - topicId int : [Topic].[ID]
+//
+// # Description
+// - The function shall delete rows matched with arguments `userId` and `topicId` from the table `UserTopicFavourite`.
+//
+// # Tables Affected
+// - UserTopicFavourite
+//   - DELETE
+//
+// # Returns
+// - error when:
+//   - Skill Issues
+//   - Table UserTopicFavourite does not exist
+//     - Please run the function `SetupDatabase()` before using the database.
+//
+// # Author
+// - Polariusz
+func DeleteFavouriteTopic(con *sql.DB, userId int, topicId int) error {
+	stmtStr := `
+		DELETE FROM UserTopicFavourite
+		WHERE userId = ?
+		AND topicId = ?
+	`
+
+	stmt, err := con.Prepare(stmtStr)
+	if err != nil {
+		return fmt.Errorf("Error while preparing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
+	}
+
+	if _, err := stmt.Exec(userId); err != nil {
+		return fmt.Errorf("Error while executing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
+	}
+
+	return nil
+}
