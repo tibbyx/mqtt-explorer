@@ -383,6 +383,7 @@ func SelectMessagesByTopicIdAndBrokerId(con *sql.DB, topicId int, brokerId int) 
 // +----------------+-----------+--------------------------------------------------------------------------------------------+
 // | 2025-05-29     | Polariusz | Created                                                                                    |
 // | 2025-05-30     | Polariusz | Fixed references in rows.Scan() and changed the statement to use the ROW_NUMBER() function |
+// | 2025-06-02     | Polariusz | added missing arguments under the description documentation of the function                |
 //
 // # Arguments
 // - con *sql.DB  : It's a connection to the database.
@@ -391,7 +392,7 @@ func SelectMessagesByTopicIdAndBrokerId(con *sql.DB, topicId int, brokerId int) 
 // - index int    : Select from `LIMIT_MESSAGES*index` to `LIMIT_MESSAGES*(1+index)` messages.
 //
 // # Description
-// - The function shall select matched to arguments `` for matching to Topic, `` for matching to Broker and `` for limiting messages Messages from table `Message` by a connected to `con` Database.
+// - The function shall select matched to arguments `topicId` for matching to Topic, `brokerId` for matching to Broker and `index` for limiting messages Messages from table `Message` by a connected to `con` Database.
 // - It selects up to `LIMIT_MESSAGES` Messages
 //
 // # Tables Affected
