@@ -49,7 +49,7 @@ func SetupDatabase(con *sql.DB) error {
 		`CREATE TABLE IF NOT EXISTS User (
 			ID INTEGER PRIMARY KEY AUTOINCREMENT,
 			BrokerId INTEGER NOT NULL,
-			ClientId INTEGER NOT NULL,
+			ClientId TEXT NOT NULL,
 			Username TEXT NOT NULL,
 			Password TEXT,
 			Outsider BOOLEAN,
@@ -61,11 +61,13 @@ func SetupDatabase(con *sql.DB) error {
 			ID INTEGER PRIMARY KEY AUTOINCREMENT,
 			UserId INTEGER NOT NULL,
 			TopicId INTEGER NOT NULL,
+			BrokerId INTEGER NOT NULL,
 			QoS TINYINT,
-			Date INTEGER,
 			Message TEXT,
+			CreationDate DATETIME,
 			FOREIGN KEY(UserId) REFERENCES User(ID),
-			FOREIGN KEY(TopicId) REFERENCES Topic(ID)
+			FOREIGN KEY(TopicId) REFERENCES Topic(ID),
+			FOREIGN KEY(BrokerId) REFERENCES Broker(ID)
 		);`,
 
 		`CREATE TABLE IF NOT EXISTS Topic (
@@ -110,8 +112,7 @@ func SetupDatabase(con *sql.DB) error {
 // |                        | CreationDate DateTime |
 //
 // # Used in
-// - InsertNewBroker()
-// - SelectBrokerByIpAndPort()
+// - SelectBrokerList()
 //
 // # Author
 // - Polariusz
@@ -171,7 +172,6 @@ func InsertNewBroker(con *sql.DB, broker InsertBroker) error {
 //
 // # Used in
 // - SelectBrokerList()
-// - SelectBrokerByIpAndPort()
 //
 // # Author
 // - Polariusz
