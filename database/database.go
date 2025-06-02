@@ -73,10 +73,12 @@ func SetupDatabase(con *sql.DB) error {
 		`CREATE TABLE IF NOT EXISTS Topic (
 			ID INTEGER PRIMARY KEY AUTOINCREMENT,
 			UserId INTEGER NOT NULL,
+			BrokerId INTEGER NOT NULL,
 			Subscribed BOOLEAN,
-			Date INTEGER,
 			Topic TEXT NOT NULL,
-			FOREIGN KEY(UserId) REFERENCES User(ID)
+			CreationDate DATETIME,
+			FOREIGN KEY(UserId) REFERENCES User(ID),
+			FOREIGN KEY(BrokerId) REFERENCES Broker(ID)
 		);`,
 
 		`CREATE TABLE IF NOT EXISTS UserTopicFavourite (
