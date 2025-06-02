@@ -888,3 +888,230 @@ func DeleteTopic(con *sql.DB, topicId int) error {
 
 	return nil
 }
+
+/*                                       +---------+                                       */
+/* --------------------------------------| MESSAGE |-------------------------------------- */
+/*                                       +---------+                                       */
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-29     | Polariusz | Created |
+//
+// # Struct to Table Message
+//
+// | Struct InsertMessage   | Table Message         |
+// +------------------------+-----------------------+
+// |                        | ID INTEGER            |
+// | UserId int             | UserId INTEGER        |
+// | TopicId int            | TopicId INTEGER       |
+// | BrokerId int           | BrokerId INTEGER      |
+// | QoS int                | QoS TINYINT           |
+// | Message string         | Message TEXT          |
+// |                        | CreationDate DateTime |
+//
+// # Used in
+// - InsertNewMessage()
+//
+// # Author
+// - Polariusz
+type InsertMessage struct {
+	UserId int
+	TopicId int
+	BrokerId int
+	QoS int
+	Message string
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-29     | Polariusz | Created |
+//
+// # Arguments
+// - con *sql.DB           : It's a connection to the database that is used here to insert stuff in.
+// - message InsertMessage : The struct that will be written into table `Message`.
+//
+// # Description
+// - The function shall insert the argument `message` with the current date into table Message from connected to database argument `con`.
+//
+// # Tables Affected
+// - Message
+//   - INSERT
+//
+// # Returns
+// - error when:
+//   - Skill Issues
+//   - Table Message does not exist
+//     - Run SetupDatabase() before this function.
+//   - Foreign Key issues
+//
+// # Author
+// - Polariusz
+func InsertNewMessage(con *sql.DB, message InsertMessage) error {
+	stmt, err := con.Prepare(`
+		INSERT INTO Message(UserId, TopicId, BrokerId, QoS, Message, CreationDate)
+		VALUES(?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	if _, err := stmt.Exec(message.UserId, message.TopicId, message.BrokerId, message.QoS, message.Message, time.Now()); err != nil {
+		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	return nil
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-29     | Polariusz | Created |
+//
+// # Struct to Table Message
+//
+// | Struct SelectMessage   | Table Message         |
+// +------------------------+-----------------------+
+// | Id int                 | ID INTEGER            |
+// | UserId int             | UserId INTEGER        |
+// | TopicId int            | TopicId INTEGER       |
+// | BrokerId int           | BrokerId INTEGER      |
+// | QoS int                | QoS TINYINT           |
+// | Message string         | Message TEXT          |
+// | CreationDate time.Time | CreationDate DateTime |
+//
+// # Used in
+// - SelectMessagesByTopicIdAndBrokerId()
+// - SelectMessagesByTopicIdBrokerIdAndIndex()
+//
+// # Author
+// - Polariusz
+type SelectMessage struct {
+	Id int
+	UserId int
+	TopicId int
+	BrokerId int
+	QoS int
+	Message string
+	CreationDate time.Time
+}
+
+// | Date of change | By        | Comment                         |
+// +----------------+-----------+---------------------------------+
+// | 2025-05-29     | Polariusz | Created                         |
+// | 2025-05-30     | Polariusz | Fixed references in rows.Scan() |
+//
+// # Arguments
+// - con *sql.DB  : It's a connection to the database.
+// - topicId int  : Unique Identifier of table Topic
+// - brokerId int : Unique Identifier of table Broker
+//
+// # Description
+// - Selects a list of messages from table Message matched to arguments `topicId` for messages in a Topic and `brokerId` for messages in a broker.
+// - It selects all rows.
+//
+// # Tables Affected
+// - Message
+//   - SELECT
+//
+// # Returns
+// - A list of struct `SelectMessage`
+// - error when:
+//   - Skill Issues
+//   - Table Message does not exist
+//     - Run SetupDatabase() before this function.
+//
+// # Author
+// - Polariusz
+func SelectMessagesByTopicIdAndBrokerId(con *sql.DB, topicId int, brokerId int) ([]SelectMessage, error) {
+	var selectMessageList []SelectMessage
+
+	stmt, err := con.Prepare(`
+		SELECT *
+		FROM Message
+		WHERE
+		  TopicId = ?
+		AND
+		  BrokerId = ?
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	rows, err := stmt.Query(topicId, brokerId)
+	if err != nil {
+		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	for rows.Next() {
+		var selectMessage SelectMessage
+		rows.Scan(&selectMessage.Id, &selectMessage.UserId, &selectMessage.TopicId, &selectMessage.BrokerId, &selectMessage.QoS, &selectMessage.Message, &selectMessage.CreationDate)
+		selectMessageList = append(selectMessageList, selectMessage)
+	}
+
+	return selectMessageList, nil
+}
+
+// | Date of change | By        | Comment                                                                                    |
+// +----------------+-----------+--------------------------------------------------------------------------------------------+
+// | 2025-05-29     | Polariusz | Created                                                                                    |
+// | 2025-05-30     | Polariusz | Fixed references in rows.Scan() and changed the statement to use the ROW_NUMBER() function |
+// | 2025-06-02     | Polariusz | added missing arguments under the description documentation of the function                |
+//
+// # Arguments
+// - con *sql.DB  : It's a connection to the database.
+// - topicId int  : Unique Identifier of table Topic
+// - brokerId int : Unique Identifier of table Broker
+// - index int    : Select from `LIMIT_MESSAGES*index` to `LIMIT_MESSAGES*(1+index)` messages.
+//
+// # Description
+// - The function shall select matched to arguments `topicId` for matching to Topic, `brokerId` for matching to Broker and `index` for limiting messages Messages from table `Message` by a connected to `con` Database.
+// - It selects up to `LIMIT_MESSAGES` Messages
+//
+// # Tables Affected
+// - Message
+//   - SELECT
+//
+// # Returns
+// - A list of struct `SelectMessage`
+// - error when:
+//   - Skill Issues
+//   - Table Message does not exist
+//     - Run SetupDatabase() before this function.
+//
+// # Author
+// - Polariusz
+func SelectMessagesByTopicIdBrokerIdAndIndex(con *sql.DB, topicId int, brokerId int, index int) ([]SelectMessage, error) {
+	var selectMessageList []SelectMessage
+	stmtStr := `
+		SELECT ID, UserId, TopicId, BrokerId, QoS, Message, CreationDate
+		FROM (
+			ROW_NUMBER() OVER(ORDER BY ID) as RowCnt, ID, UserId, TopicId, BrokerId, QoS, Message, CreationDate
+			FROM MESSAGE
+			WHERE
+				TopicId = ?
+			AND
+				BrokerId = ?
+		) MsgWithCnt
+		WHERE
+			RowCnt > ? * ?
+		AND
+			RowCnt <= (1+?) * ?
+	`
+
+	stmt, err := con.Prepare(stmtStr)
+	if err != nil {
+		return nil, fmt.Errorf("Error while preparing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
+	}
+
+	rows, err := stmt.Query(topicId, brokerId, index, LIMIT_MESSAGES, index, LIMIT_MESSAGES)
+	if err != nil {
+		return nil, fmt.Errorf("Error while querying the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
+	}
+
+	for rows.Next() {
+		var selectMessage SelectMessage
+		rows.Scan(&selectMessage.Id, &selectMessage.UserId, &selectMessage.TopicId, &selectMessage.BrokerId, &selectMessage.QoS, &selectMessage.Message, &selectMessage.CreationDate)
+		selectMessageList = append(selectMessageList, selectMessage)
+	}
+
+	return selectMessageList, nil
+}
