@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useRef, useState} from "react"
+import {useCallback, useEffect, useState} from "react"
 import {v4 as uuidv4} from "uuid"
 import type {Message, QoSLevel, Topic} from "../lib/types"
 
@@ -6,13 +6,14 @@ interface MqttWebSocketOptions {
     onConnect?: () => void
     onDisconnect?: () => void
     searchQuery?: string
+    shouldConnect?: boolean
 }
 
-export function useMqttWebSocket({onConnect, searchQuery = ""}: MqttWebSocketOptions = {}) {
+export function useMqttWebSocket({onConnect,onDisconnect, searchQuery = "",shouldConnect = false}: MqttWebSocketOptions = {}) {
     const [connected, setConnected] = useState(false)
     const [topics, setTopics] = useState<Topic[]>([])
     const [messages, setMessages] = useState<Message[]>([])
-    const reconnectTimeoutRef = useRef<number | null>(null)
+    //const reconnectTimeoutRef = useRef<number | null>(null)
 
     // Filter topics
     const filteredTopics = topics.filter((topic) => topic.name.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -28,25 +29,29 @@ export function useMqttWebSocket({onConnect, searchQuery = ""}: MqttWebSocketOpt
             // Load some sample topics
             if (topics.length === 0) {
                 setTopics([
-                    {id: uuidv4(), name: "dominik", subscribed: true},
-                    {id: uuidv4(), name: "kevin", subscribed: false},
-                    {id: uuidv4(), name: "neeko", subscribed: true},
+                    {id: uuidv4(), name: "Brot", subscribed: true},
+                    {id: uuidv4(), name: "Golf", subscribed: true},
+                    {id: uuidv4(), name: "Espresso", subscribed: true},
+                    {id: uuidv4(), name: "Schule", subscribed: false},
+                    {id: uuidv4(), name: "Arbeit", subscribed: false},
                 ])
             }
         }, 1000)
     }, [onConnect, topics.length])
 
+    const disconnectWebSocket = useCallback(() => {
+        setConnected(false)
+        onDisconnect?.()
+    }, [onDisconnect])
+
     // Connect on mount
     useEffect(() => {
-        connectWebSocket()
-
-        // Cleanup on unmount
-        return () => {
-            if (reconnectTimeoutRef.current) {
-                clearTimeout(reconnectTimeoutRef.current)
-            }
+        if (shouldConnect && !connected) {
+            connectWebSocket()
+        } else if (!shouldConnect && connected) {
+            disconnectWebSocket()
         }
-    }, [connectWebSocket])
+    }, [shouldConnect, connected, connectWebSocket, disconnectWebSocket])
 
     // Create a new topic
     const createTopic = useCallback((name: string) => {
@@ -100,7 +105,10 @@ export function useMqttWebSocket({onConnect, searchQuery = ""}: MqttWebSocketOpt
         return newMessage
     }, [])
 
+
     return {
+        connect: connectWebSocket,
+        disconnect: disconnectWebSocket,
         connected,
         topics,
         messages,

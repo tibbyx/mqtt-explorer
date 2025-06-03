@@ -6,6 +6,7 @@ import {MessageSquare, Plus} from "lucide-react";
 import {ScrollArea} from "../ui/scroll-area";
 import type {Topic} from "@/lib/types.ts";
 import {ChevronDown} from "lucide-react";
+//import {useTopics} from "@/api/hooks/useTopics";
 
 interface TopicPanelProps {
     topics: Topic[];
@@ -35,11 +36,17 @@ export default function TopicPanel({
     const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
     const [editingName, setEditingName] = useState("");
     const [localTopics, setLocalTopics] = useState<Topic[]>([]);
-    const [showTopics, setShowTopics] = useState(false);
+    const [showTopics, setShowTopics] = useState(true);
+    //const {fetchTopics /*topics*/, error, isLoading} = useTopics()
 
     useEffect(() => {
         setLocalTopics(topics);
     }, [topics]);
+
+    /*    useEffect(() => {
+            fetchTopics()
+            console.log("Fetched Topics: ", topics)
+        }, [fetchTopics]);*/
 
     const handleCreateSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -73,7 +80,7 @@ export default function TopicPanel({
     return (
         <div
             className="w-100 border-r border-t h-full">
-            <div className="p-4 border-b flex items-center justify-between">
+            <div className="p-4 h-16 border-b flex items-center justify-between">
                 <h2>
                     Server
                 </h2>
@@ -88,7 +95,7 @@ export default function TopicPanel({
             </div>
             {isConnected && (
                 <div
-                    className="p-4 flex items-center justify-between cursor-pointer transition bg-[var(--background)] border-b border-[var(--border)]"
+                    className="p-4 h-16 flex items-center justify-between cursor-pointer transition bg-[var(--background)] border-b border-[var(--border)]"
                     onClick={() => setShowTopics(prev => !prev)}
                 >
                     <h2 className="dark:text-gray-200 ">
@@ -131,7 +138,7 @@ export default function TopicPanel({
                                 </div>
                             ) : (
                                 <ul className="space-y-1">
-                                    {localTopics.map((topic) => (
+                                    {topics.map((topic) => (
                                         <TopicItem
                                             key={topic.id}
                                             topic={topic}

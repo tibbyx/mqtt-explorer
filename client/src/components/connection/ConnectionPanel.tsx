@@ -3,11 +3,15 @@ import {Button} from "@/components/ui/button.tsx";
 import {Input} from "@/components/ui/input.tsx";
 import {Label} from "@/components/ui/label.tsx";
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select.tsx";
+import {useConnection} from "@/api/hooks/useConnection.ts";
+import type {Credentials} from "@/lib/types.ts";
 
 export function ConnectionPanel({onToggleConnect}: { onToggleConnect?: () => void } = {}) {
     const [host, setHost] = useState("localhost");
     const [port, setPort] = useState(1883);
     const [clientId, setClientId] = useState(`Bob-${Math.random().toString(16).substring(2, 4)}`);
+
+    const {connect, error} = useConnection()
 
     const presets = [
         {name: "Mosquitto", host: "test.mosquitto.org", port: 1883},
@@ -24,42 +28,25 @@ export function ConnectionPanel({onToggleConnect}: { onToggleConnect?: () => voi
     };
 
     const handleConnect = async () => {
-        const payload = {
-            Ip: host,
-            Port: port.toString(),
-            ClientId: clientId,
-        };
-
+        const payload: Credentials = {
+            ip: host,
+            port: port.toString(),
+            clientId: clientId
+        }
         try {
-            const response = await fetch("http://localhost:3000/credentials", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(payload),
-            });
-
-            if (!response.ok) {
-                throw new Error(`Connection failed with status ${response.status}`);
-            }
-
-            const result = await response.json();
-            console.log("Connection successful:", result);
-
+            const response = await connect(payload)
+            console.log("Handle MQTT Connected:", response);
             if (onToggleConnect) {
                 onToggleConnect();
             }
-
-        } catch (error) {
-            console.error("Connection error:", error);
-            alert("Failed to connect to MQTT broker.");
+        } catch (err) {
+            console.error("Connection failed! :(")
         }
-    };
-
+    }
 
     return (
         <div className="flex-1 flex flex-col h-full border-t overflow-auto">
-            <div className="p-4 border-b flex items-center justify-between">
+            <div className="p-4 h-17 border-b flex items-center justify-between">
                 <h2>
                     Connection Settings
                 </h2>
@@ -134,6 +121,11 @@ export function ConnectionPanel({onToggleConnect}: { onToggleConnect?: () => voi
                     </div>
                 </div>
             </div>
+            {error && (
+                <div className="p-2 bg-red-100 text-red-700 rounded">
+                    {error.message}
+                </div>
+            )}
         </div>
     );
 }

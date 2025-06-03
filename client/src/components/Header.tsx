@@ -8,9 +8,10 @@ import {debounce} from "@/lib/utils.ts";
 
 interface HeaderProps {
     onSearch: (query: string) => void
+    isConnected: boolean
 }
 
-export function Header({onSearch}: HeaderProps) {
+export function Header({onSearch, isConnected}: HeaderProps) {
     const [searchValue, setSearchValue] = useState("")
 
     // Debounce search input
@@ -31,14 +32,28 @@ export function Header({onSearch}: HeaderProps) {
                 <h1 className={"text-3xl text-[var(--primary)]"}>
                     MQTT Dashboard
                 </h1>
-                <Badge
-                    variant="outline"
-                    className={"ml-2 text-green-400 dark:bg-green-500/20 dark:text-green-500 dark:border-green-800/50"}>
-                    <div className={"flex items-center gap-1.5"}>
-                        <Wifi className={"h-3 w-3"}/>
-                        <span className={"font-medium"}>Connected</span>
-                    </div>
-                </Badge>
+                {isConnected && (
+                    <Badge
+                        variant="outline"
+                        className={"ml-2 text-green-400 dark:bg-green-300/20 dark:text-green-400 dark:border-green-400/50"}>
+                        <div className={"flex items-center gap-1.5"}>
+                            <Wifi className={"h-3 w-3"}/>
+                            <span className={"font-medium"}>Connected</span>
+                        </div>
+                    </Badge>
+                )}
+                {
+                    !isConnected && (
+                        <Badge
+                            variant="outline"
+                            className={"ml-2 text-red-400 dark:bg-red-300/20 dark:text-red-400 dark:border-red-400/50"}>
+                            <div className={"flex items-center gap-1.5"}>
+                                <Wifi className={"h-3 w-3"}/>
+                                <span className={"font-medium"}>Not Connected</span>
+                            </div>
+                        </Badge>
+                    )
+                }
             </div>
             <div className={"flex items-center gap-4"}>
                 <div className="relative w-64">

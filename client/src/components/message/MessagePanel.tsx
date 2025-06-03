@@ -1,7 +1,7 @@
 import React, {useState, useRef, useEffect} from "react";
 import type {Message, QoSLevel, Topic} from "@/lib/types";
 import {NoTopicSelectedView} from "./NoTopicSelectedView";
-import {MessageTopicHeader} from "./MessageTopicHeader.tsx";
+import {MessageTopicHeader} from "./MessageTopicHeader";
 import {MessagesContainer} from "./MessageContainer";
 import {MessageComposer} from "./MessageComposer";
 
@@ -11,6 +11,10 @@ export interface MessagePanelProps {
     onPublish: (topic: string, payload: string, qos: QoSLevel) => void;
     onSubscribe?: (topicId: string) => void;
     onUnsubscribe?: (topicId: string) => void;
+    onCloseTopic: () => void;
+    isSplitScreen: boolean;
+    onToggleSplitScreen: () => void;
+    className?: string;
 }
 
 export function MessagePanel({
@@ -19,6 +23,10 @@ export function MessagePanel({
                                  onPublish,
                                  onSubscribe,
                                  onUnsubscribe,
+                                 onCloseTopic,
+                                 isSplitScreen,
+                                 onToggleSplitScreen,
+                                 className,
                              }: MessagePanelProps) {
 
     const [messageText, setMessageText] = useState("");
@@ -27,6 +35,7 @@ export function MessagePanel({
     const [filterQos, setFilterQos] = useState<QoSLevel | null>(null);
     const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
+
 
     useEffect(() => {
         setIsSubscribed(topic?.subscribed ?? null);
@@ -71,13 +80,17 @@ export function MessagePanel({
     }
 
     return (
-        <div className="flex-1 flex flex-col h-full bg-gray-50 dark:bg-[var(--secondary-foreground)]">
+        <div
+            className={`flex-1 flex flex-col h-full bg-gray-50 dark:bg-[var(--secondary-foreground)] ${className ?? ""}`}>
             <MessageTopicHeader
                 topicName={topic.name}
                 isSubscribed={!!isSubscribed}
                 onSubscriptionToggle={handleSubscriptionToggle}
                 filterQos={filterQos}
                 onFilterChange={handleQosFilterChange}
+                onCloseTopic={onCloseTopic}
+                isSplitScreen={isSplitScreen}
+                onToggleSplitScreen={onToggleSplitScreen}
             />
 
             <MessagesContainer
