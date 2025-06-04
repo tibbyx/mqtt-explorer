@@ -1,4 +1,4 @@
-### Compile:
+### Compile on Linux:
 ```bash
 go build main.go
 ```
@@ -12,6 +12,20 @@ go run main.go
 ```bash
 ./main
 ```
+
+### Compile on Linux for Windows:
+
+#### arch=amd64
+```bash
+GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CXX=x86_64-w64-mingw32-g++ CC=x86_64-w64-mingw32-gcc go build
+```
+
+#### arch=i386
+```bash
+GOOS=windows GOARCH=386 CGO_ENABLED=1 CXX=i686-w64-mingw32-g++ CC=i686-w64-mingw32-gcc go build
+```
+You will need the mingw package.
+Note that it is possible to use musl. Probably, I haven't really tested it.
 
 ### If you compiled on windows:
 ```powershell
