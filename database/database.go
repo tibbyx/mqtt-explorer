@@ -8,6 +8,7 @@ import (
 )
 
 const databaseName string = "mqtt-client-database.db"
+const LIMIT_MESSAGES int = 500
 
 // | Date of change | By        | Comment |
 // +----------------+-----------+---------+
@@ -86,7 +87,6 @@ func SetupDatabase(con *sql.DB) error {
 			UserId INTEGER NOT NULL,
 			TopicId INTEGER NOT NULL,
 			CreationDate DATETIME,
-			PRIMARY KEY(UserId, TopicId),
 			FOREIGN KEY(UserId) REFERENCES User(ID),
 			FOREIGN KEY(TopicId) REFERENCES Topic(ID)
 		);`,
