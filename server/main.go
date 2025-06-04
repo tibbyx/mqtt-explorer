@@ -2,6 +2,7 @@ package main
 
 import (
 	"database"
+	"database/sql"
 
 	"github.com/gofiber/fiber/v2"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"strconv"
 )
 
 // # Author
@@ -54,18 +56,22 @@ type ServerState struct {
 	allKnownTopics []string // TODO: This probably has to be a struct array of a pair, a pair of topic and epoch time.
 	receivedMessages map[string][]string // TODO: This should be in a database that we don't have yet.
 	favouriteTopics []string // TODO: This should be in a database that we don't have yet.
+	con *sql.DB
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Polariusz | Created       |
-// | 2025-05-13     | Polariusz | Documentation |
+// | Date of change | By        | Comment                     |
+// +----------------+-----------+-----------------------------+
+// |                | Polariusz | Created                     |
+// | 2025-05-13     | Polariusz | Documentation               |
+// | 2025-06-04     | Polariusz | Added Username and Password |
 //
 // # Structure:
-// - {"Ip":<I>,"Port":"<P>","ClientId":<C>}
-//   - <I>: The IP of the MQTT-Broker.
-//   - <P>: The Port that the MQTT-Broker opened for the protocol.
-//   - <C>: Client ID that functions as an username. It makes the users distinct.
+// - {"Ip":<I>,"Port":"<Po>","ClientId":"<C>","Username":"<U>","Password":"<Pa>"}
+//   - <I> : The IP of the MQTT-Broker.
+//   - <Po>: The Port that the MQTT-Broker opened for the protocol.
+//   - <C> : Client ID that functions as an username. It makes the users distinct.
+//   - <U> : Username for the broker, it's optional
+//   - <Pa>: Password for the broker, it's optional
 //
 // # Used in
 // - struct ServerState
@@ -79,6 +85,8 @@ type MqttCredentials struct {
 	Ip string
 	Port string // TODO: It would be probably nice to store it as a numeric.
 	ClientId string
+	Username string
+	Password string
 }
 
 // # Author
@@ -103,6 +111,7 @@ func main() {
 	server := fiber.New()
 	var serverState ServerState
 	serverState.receivedMessages = make(map[string][]string)
+	serverState.con = con
 
 	addRoutes(server, &serverState)
 
@@ -143,6 +152,7 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 // +----------------+-----------+---------------+
 // |                | Polariusz | Created       |
 // | 2025-05-13     | Polariusz | Documentation |
+// | 2025-06-04     | Polariusz | Integrated DB |
 //
 // # Method-Type
 // - Handler
@@ -160,12 +170,13 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 //
 // # Returns
 // - 200 (Ok): JSON
-//   - {"goodJson":"Connecting to `Ip`:`Port` succeded"}
+//   - {"goodJson":"Connecting to `Ip`:`Port` succeded", "brokerId":"<B>", "userId":"<U>"}
 // - 400 (Bad Request): JSON
 //   - {"badJson":`const BADJSON`}
 //   - {"badJson":`errorMessage`}
 // - 404 (Not Found): JSON
 //   - {"badMqtt":"Connecting to `Ip`:`Port` failed"}
+// - 500 (Internal Server Error): JSON
 //
 // # Author
 // - Polariusz
@@ -204,11 +215,31 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 			})
 		}
 
+		// Skipping err, as this should be validated in the validation function.
+		port, _ := strconv.Atoi(userCreds.Port)
+		brokerId, err := database.InsertNewBroker(serverState.con, database.InsertBroker{userCreds.Ip, port})
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"InternalServerError" : "Error while inserting in the Broker table",
+				"Error" : err,
+			})
+		}
+
+		userId, err := database.InsertNewUser(serverState.con, database.InsertUser{brokerId, userCreds.ClientId, userCreds.Username, userCreds.Password, false})
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"InternalServerError" : "Error while inserting in the User table",
+				"Error" : err,
+			})
+		}
+
 		serverState.userCreds = userCreds
 		serverState.mqttClient = mqttClient
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"goodJson": fmt.Sprintf("Connecting to %s:%s succeded", userCreds.Ip, userCreds.Port),
+			"goodJson" : fmt.Sprintf("Connecting to %s:%s succeded", userCreds.Ip, userCreds.Port),
+			"brokerId" : brokerId,
+			"userId" : userId,
 		})
 	}
 }
