@@ -335,9 +335,10 @@ type InsertUser struct {
 	Outsider bool
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-22     | Polariusz | Created |
+// | Date of change | By        | Comment             |
+// +----------------+-----------+---------------------+
+// | 2025-05-22     | Polariusz | Created             |
+// | 2025-06-04     | Polariusz | Added the ID return |
 //
 // # Arguments
 // - con *sql.DB     : It's a connection to the database that is used here to insert stuff in.
@@ -345,30 +346,47 @@ type InsertUser struct {
 //
 // # Description
 // - The function shall insert the argument `user` with the current date into table User from connected to database argument `con`.
+// - The function shall return the ID of the table User that match the inserted argument `user`.
 //
 // # Tables Affected
 // - User
 //   - INSERT
+//   - SELECT
 //
 // # Returns
+// - int: it's the ID from table User that match the arguments `user`. It will be -1 if an error has accured.
 // - Can return error if the con isn't connected or if it doesn't have table User. In this case, please use functions `OpenDatabase()` and `SetupDatabase()` to set-up the database.
 //
 // # Author
 // - Polariusz
-func InsertNewUser(con *sql.DB, user InsertUser) error {
+func InsertNewUser(con *sql.DB, user InsertUser) (int, error) {
 	stmt, err := con.Prepare(`
 		INSERT INTO User(BrokerId, ClientId, Username, Password, Outsider, CreationDate) VALUES (?, ?, ?, ?, ?, ?)
 	`);
 
 	if err != nil {
-		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
 	if _, err := stmt.Exec(user.BrokerId, user.ClientId, user.Username, user.Password, user.Outsider, time.Now()); err != nil {
-		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
-	return nil
+	stmt, err := con.Prepare("SELECT ID FROM User WHERE BrokerId = ? AND ClientID = ? AND Username = ? AND Password = ? AND Outsider = ?")
+	if err != nil {
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	rows, err := con.Query(user.BrokerId, user.ClientId, user.Username, user.Password, user.Outsider)
+	if err != nil {
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	rows.Next()
+	var userId int
+	rows.Scan(&userId)
+
+	return userId, nil
 }
 
 // | Date of change | By        | Comment |
