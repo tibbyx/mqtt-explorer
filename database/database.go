@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 	_ "github.com/mattn/go-sqlite3"
+	"strconv"
 )
 
 const databaseName string = "mqtt-client-database.db"
@@ -372,12 +373,12 @@ func InsertNewUser(con *sql.DB, user InsertUser) (int, error) {
 		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
-	stmt, err := con.Prepare("SELECT ID FROM User WHERE BrokerId = ? AND ClientID = ? AND Username = ? AND Password = ? AND Outsider = ?")
+	stmt, err = con.Prepare("SELECT ID FROM User WHERE BrokerId = ? AND ClientID = ? AND Username = ? AND Password = ? AND Outsider = ?")
 	if err != nil {
 		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
-	rows, err := con.Query(user.BrokerId, user.ClientId, user.Username, user.Password, user.Outsider)
+	rows, err := con.Query(strconv.Itoa(user.BrokerId), user.ClientId, user.Username, user.Password, user.Outsider)
 	if err != nil {
 		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
