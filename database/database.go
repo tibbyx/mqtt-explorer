@@ -128,9 +128,10 @@ type InsertBroker struct {
 	Port int
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-21     | Polariusz | Created |
+// | Date of change | By        | Comment             |
+// +----------------+-----------+---------------------+
+// | 2025-05-21     | Polariusz | Created             |
+// | 2025-06-04     | Polariusz | Added the ID return |
 //
 // # Arguments
 // - con *sql.DB        : It's a connection to the database that is used here to insert stuff in.
@@ -139,29 +140,46 @@ type InsertBroker struct {
 // # Description
 // - The function shall insert the argument `broker` with the current date into table Broker from connected to database argument `con`.
 // - The insertion shall only happen if the `broker` is not in the database.
+// - The function shall return the ID of the inserted broker.
 //
 // # Tables Affected
 // - Broker
 //   - INSERT
-//   - SELECT (Subquery)
+//   - SELECT
 //
 // # Returns
+// - int: it's the ID from table Broker that match the arguments `broker`. It will be -1 if an error has accured.
 // - error if something bad happened. It can happen if the database that is connected does not have table Broker. In this case, please use functions `OpenDatabase()` and `SetupDatabase()` to set-up the database.
 //
 // # Author
 // - Polariusz
-func InsertNewBroker(con *sql.DB, broker InsertBroker) error {
+func InsertNewBroker(con *sql.DB, broker InsertBroker) (int, error) {
 	// I insert the arg broker while checking if it isn't in the database. If it is, the insertion will not happen.
 	stmt, err := con.Prepare("INSERT INTO Broker(Ip, Port, CreationDate) SELECT ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM Broker WHERE Ip = ? AND Port = ?)");
 	if err != nil {
-		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
 	if _, err := stmt.Exec(broker.Ip, broker.Port, time.Now(), broker.Ip, broker.Port); err != nil {
-		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
-	return nil
+	// I want to get the ID of it.
+	stmt, err = con.Prepare("SELECT ID from Broker WHERE Ip = ? AND Port = ?");
+	if err != nil {
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	rows, err := stmt.Query(broker.Ip, broker.Port)
+	if err != nil {
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	rows.Next()
+	var ID int
+	rows.Scan(&ID);
+
+	return ID, nil
 }
 
 // | Date of change | By        | Comment |
