@@ -109,12 +109,17 @@ curl -X POST localhost:3000/disconnect
 
 ### To subscribe to a topic or multiple at once:
 ```bash
-curl --request POST --header "Content-Type: application/json" --data '{"Topics":["<TOPIC-1>", "<TOPIC-2>", "<TOPIC-N>"]}' localhost:3000/topic/subscribe
+curl --request POST --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":"<BROKER-ID>", "UserId":"<USER-ID>"},"Topics":["<TOPIC-1>", "<TOPIC-2>", "<TOPIC-N>"]}' localhost:3000/topic/subscribe
 ```
 
 #### Or in other words, you need to POST into localhost:3000/topic/subscribe a JSON with this format:
 ```javascript
 {
+  "" :
+  {
+    "BrokerId" : "<BROKER-ID>",
+    "UserId" : "<USER-ID>"
+  }
   "Topics" :
   [
     "<TOPIC-1>",
