@@ -529,9 +529,10 @@ type SelectTopic struct {
 	CreationDate time.Time
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-29     | Polariusz | Created |
+// | Date of change | By        | Comment                               |
+// +----------------+-----------+---------------------------------------+
+// | 2025-05-29     | Polariusz | Created                               |
+// | 2025-06-05     | Polariusz | added defer Close() for stmt and rows |
 //
 // # Arguments
 // - con *sql.DB : It's a connection to the database that is used here to insert stuff in.
@@ -569,11 +570,13 @@ func SelectSubscribedTopics(con *sql.DB, brokerId int, userId int) ([]SelectTopi
 	if err != nil {
 		return nil, fmt.Errorf("Error while preparing the statement.\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(brokerId, userId)
 	if err != nil {
 		return nil, fmt.Errorf("Error while quering the statement.\nErr: %s\n", err)
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var topic SelectTopic
