@@ -81,12 +81,24 @@ curl --request POST --header "Content-Type: application/json" --data '{"Ip" : "<
 }
 ```
 
+#### If an sql error has accured, the server will return a 500 (Internal Server Error) with a JSON:
+```javascript
+{
+  "InternalServerError" : "Error while inserting in the <BROKER-OR-USER> table",
+  "Error" : <ERROR-MESSAGE>
+}
+```
+
+
 #### If everything will go well, the server will return a 200 (OK) with a JSON:
 ```javascript
 {
-  "goodJson" : "Connecting to <IP>:<PORT> succeded"
+  "goodJson" : "Connecting to <IP>:<PORT> succeded",
+  "brokerId" : <BROKER-ID>,
+  "userId" : <USER-ID>
 }
 ```
+Note that the client needs to remember the <BROKER-ID> and <USER-ID>.
 
 ### To disconnect from the MQTT-Broker:
 ```bash
