@@ -148,11 +148,12 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Get("/topic/favourites", GetTopicFavourites(serverState))
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Polariusz | Created       |
-// | 2025-05-13     | Polariusz | Documentation |
-// | 2025-06-04     | Polariusz | Integrated DB |
+// | Date of change | By        | Comment               |
+// +----------------+-----------+-----------------------+
+// |                | Polariusz | Created               |
+// | 2025-05-13     | Polariusz | Documentation         |
+// | 2025-06-04     | Polariusz | Integrated DB         |
+// | 2025-06-05     | Polariusz | Updated documentation |
 //
 // # Method-Type
 // - Handler
@@ -171,12 +172,17 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 // # Returns
 // - 200 (Ok): JSON
 //   - {"goodJson":"Connecting to `Ip`:`Port` succeded", "brokerId":"<B>", "userId":"<U>"}
+//     - <B>: This is the ID of the ROW from table Broker. The client needs to remember it and use it for the other functions.
+//     - <U>: This is the ID of the ROW from table User. The client needs to remember it and use it for the other functions.
 // - 400 (Bad Request): JSON
 //   - {"badJson":`const BADJSON`}
 //   - {"badJson":`errorMessage`}
 // - 404 (Not Found): JSON
 //   - {"badMqtt":"Connecting to `Ip`:`Port` failed"}
 // - 500 (Internal Server Error): JSON
+//   - {"InternalServerError" : "Error while inserting in the <T> table", "Error" : "<E>"}
+//     - <T> : It can be Broker or User
+//     - <E> : SQL Error message
 //
 // # Author
 // - Polariusz
@@ -244,10 +250,11 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 	}
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Polariusz | Created       |
-// | 2025-05-13     | Polariusz | Documentation |
+// | Date of change | By        | Comment                  |
+// +----------------+-----------+--------------------------+
+// |                | Polariusz | Created                  |
+// | 2025-05-13     | Polariusz | Documentation            |
+// | 2025-06-05     | Polariusz | Improved Port validation |
 //
 // # Method-Type
 // - Validator
@@ -255,6 +262,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 // # Description
 // - The method shall validate the argument `userCreds *MqttCredentials`.
 //   - TODO: The validation need to be improved. Right now it only checks if the argument userCreds has empty strings.
+//           The Port has now a better validation.
 //
 // # Usage
 // - Call the method with argument errorMessage if you want to know a more detailed error message and the userCreds that the user has inputted when logging in.
@@ -286,9 +294,17 @@ func validateCredentials(errorMessage *string, userCreds *MqttCredentials) int {
 		}
 		return 2
 	}
-	if _, err = strconv.Atoi(userCreds.Port); err != nil {
+	port, err := strconv.Atoi(userCreds.Port);
+	if err != nil {
 		if errorMessage != nil {
 			*errorMessage = "PORT cannot be converted to int"
+		}
+		return 2;
+	}
+
+	if port < 0 || port > 65535 {
+		if errorMessage != nil {
+			*errorMessage = "PORT is not between 0 and 65535"
 		}
 		return 2;
 	}
