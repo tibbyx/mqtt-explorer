@@ -809,22 +809,16 @@ func GetTopicAllKnownHandler(serverState *ServerState) fiber.Handler {
 // - Polariusz
 func PostDisconnectFromBrokerHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if(serverState.userCreds.Ip == "") {
+		if !serverState.mqttClient.IsConnected() {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"BadRequest": "The server isn't even connected to any MQTT-Brokers",
 			})
 		}
 
 		serverState.mqttClient.Disconnect(250)
-		message := fmt.Sprintf("The MQTT-Client disconented from %s:%s Broker", serverState.userCreds.Ip, serverState.userCreds.Port)
-
-		serverState.userCreds.Ip = ""
-		serverState.userCreds.Port = ""
-		serverState.userCreds.ClientId = ""
-		serverState.subscribedTopics = nil
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"Fine": message,
+			"Fine": "The MQTT-Client disconnected from the broker.",
 		})
 	}
 }
