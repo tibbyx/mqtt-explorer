@@ -286,6 +286,12 @@ func validateCredentials(errorMessage *string, userCreds *MqttCredentials) int {
 		}
 		return 2
 	}
+	if _, err = strconv.Atoi(userCreds.Port); err != nil {
+		if errorMessage != nil {
+			*errorMessage = "PORT cannot be converted to int"
+		}
+		return 2;
+	}
 
 	// VALIDATE CLIENTID
 	if userCreds.ClientId == "" {
