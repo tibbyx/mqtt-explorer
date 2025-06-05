@@ -2,6 +2,7 @@ package main
 
 import (
 	"database"
+	"database/sql"
 
 	"github.com/gofiber/fiber/v2"
 	"fmt"
@@ -10,6 +11,25 @@ import (
 	"strings"
 	"time"
 )
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-06-05     | Polariusz | Created |
+//
+// # Structure:
+// - {"BrokerId":<B>,"UserId":<U>}
+//   - <B> : The ID of the Broker ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
+//   - <U> : The ID of the User ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
+//
+// # Used in
+// - type TopicsWrapper struct
+//
+// # Author
+// - Polariusz
+type BrokerUser struct {
+	BrokerId int
+	UserId int
+}
 
 // # Author
 // - Polariusz
@@ -54,6 +74,7 @@ type ServerState struct {
 	allKnownTopics []string // TODO: This probably has to be a struct array of a pair, a pair of topic and epoch time.
 	receivedMessages map[string][]string // TODO: This should be in a database that we don't have yet.
 	favouriteTopics []string // TODO: This should be in a database that we don't have yet.
+	con *sql.DB
 }
 
 // | Date of change | By        | Comment       |
@@ -103,6 +124,7 @@ func main() {
 	server := fiber.New()
 	var serverState ServerState
 	serverState.receivedMessages = make(map[string][]string)
+	serverState.con = con
 
 	addRoutes(server, &serverState)
 
