@@ -296,8 +296,10 @@ func validateCredentials(errorMessage *string, userCreds *MqttCredentials) int {
 // | 2025-06-05     | Polariusz | Added BrokerUser |
 //
 // # Structure:
-// - {"Topics":<T>}
-//   - <T>: String array of topics
+// - {"BrokerUserIds":{"BrokerId":"<B>", "UserId":"<U>"},"Topics":[<T>]}
+//   - <B> : The ID of the Broker ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
+//   - <U> : The ID of the User ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
+//   - <T> : String array of topics
 //
 // # Used in
 // - PostTopicSubscribeHandler()
