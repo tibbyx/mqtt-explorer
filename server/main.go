@@ -2,6 +2,7 @@ package main
 
 import (
 	"database"
+	"database/sql"
 
 	"github.com/gofiber/fiber/v2"
 	"fmt"
@@ -73,6 +74,7 @@ type ServerState struct {
 	allKnownTopics []string // TODO: This probably has to be a struct array of a pair, a pair of topic and epoch time.
 	receivedMessages map[string][]string // TODO: This should be in a database that we don't have yet.
 	favouriteTopics []string // TODO: This should be in a database that we don't have yet.
+	con *sql.DB
 }
 
 // | Date of change | By        | Comment       |
@@ -122,6 +124,7 @@ func main() {
 	server := fiber.New()
 	var serverState ServerState
 	serverState.receivedMessages = make(map[string][]string)
+	serverState.con = con
 
 	addRoutes(server, &serverState)
 
@@ -383,7 +386,7 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 			})
 		}
 
-		dbTopicList, err := database.SelectTopicsByBrokerIdAndUserId()
+		dbTopicList, err := database.SelectTopicsByBrokerIdAndUserId(serverState.con, subscribeTopics.BrokerUserIDs.BrokerId, subscribeTopics.BrokerUserIDs.UserId)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"InternalServerError": "Error while selecting topics from the database",
@@ -396,26 +399,34 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 		topicResult := make(map[string]TopicResult)
 		atLeastOneBadTopic := false
 
-		for index, topic := range subscribeTopics.Topics {
-			topicStatus := getTopicSubscribedStatus(dbTopicList, topic)
-			if topicStatus == 0 {
-				// not subscribed
+		for _, topic := range subscribeTopics.Topics {
+			topicId, topicStatus := getTopicSubscribedStatus(dbTopicList, topic)
+			if topicId < 0 {
+				// Topic DOES NOT EXISTS
 				if token := serverState.mqttClient.Subscribe(topic, 0, nil); token.Wait() && token.Error() != nil {
 					topicResult[topic] = TopicResult{"Error", "Make sure that the topic conforms the MQTT-Broker configuration."}
 				} else {
-					// TODO: SubscribeTopic
-					topicResult[topic] = TopicResult{"Fine", "Subscribed to the topic"}
+					err := database.InsertNewTopic(serverState.con, database.InsertTopic{subscribeTopics.BrokerUserIDs.UserId, subscribeTopics.BrokerUserIDs.BrokerId, true, topic})
+					if err != nil {
+						topicResult[topic] = TopicResult{"BigError", err.Error()}
+					} else {
+						topicResult[topic] = TopicResult{"Fine", "Subscribed to the topic"}
+					}
 				}
-			} else if topicStatus == 1 {
-				// subscribed
+			} else if topicStatus {
+				// Topic DOES EXIST and IS subscribed
 				topicResult[topic] = TopicResult{"What", "The topic is already subscribed"}
 			} else {
-				// does not exist
+				// Topic DOES EXIST and IS NOT subscribed
 				if token := serverState.mqttClient.Subscribe(topic, 0, nil); token.Wait() && token.Error() != nil {
 					topicResult[topic] = TopicResult{"Error", "Make sure that the topic conforms the MQTT-Broker configuration."}
 				} else {
-					// TODO: insert new topic
-					topicResult[topic] = TopicResult{"Fine", "Subscribed to the topic"}
+					err := database.SubscribeTopic(serverState.con, topicId)
+					if err != nil {
+						topicResult[topic] = TopicResult{"BigError", err.Error()}
+					} else {
+						topicResult[topic] = TopicResult{"Fine", "Subscribed to the topic"}
+					}
 				}
 			}
 		}
@@ -432,13 +443,24 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 	}
 }
 
-func getTopicSubscribedStatus(existingTopics []database.SelectTopic, newTopic string) int {
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-06-05     | Polariusz | Created |
+//
+// # Returns
+// - <ID>, <S>
+//   - <S>  : ID from matching argument `existingTopic` by argument `newTopic`, can be -1 if it does not match
+//   - <S>  : Subscribed bool from matching argument `existingTopic` by argument `newTopic`, can be -1 if it does not match 
+//
+// # Author
+// - Polariusz
+func getTopicSubscribedStatus(existingTopics []database.SelectTopic, newTopic string) (int, bool) {
 	for index, topic := range existingTopics {
 		if topic.Topic == newTopic {
-			return existingTopics[index].Subscribed
+			return existingTopics[index].Id, existingTopics[index].Subscribed
 		}
 	}
-	return -1
+	return -1, false
 }
 
 // | Date of change | By        | Comment                |
