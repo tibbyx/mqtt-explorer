@@ -239,7 +239,6 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 			})
 		}
 
-		serverState.userCreds = userCreds
 		serverState.mqttClient = mqttClient
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
