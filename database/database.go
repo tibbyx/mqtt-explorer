@@ -129,10 +129,11 @@ type InsertBroker struct {
 	Port int
 }
 
-// | Date of change | By        | Comment             |
-// +----------------+-----------+---------------------+
-// | 2025-05-21     | Polariusz | Created             |
-// | 2025-06-04     | Polariusz | Added the ID return |
+// | Date of change | By        | Comment                          |
+// +----------------+-----------+----------------------------------+
+// | 2025-05-21     | Polariusz | Created                          |
+// | 2025-06-04     | Polariusz | Added the ID return              |
+// | 2025-06-05     | Polariusz | fix: added stmt and rows closing |
 //
 // # Arguments
 // - con *sql.DB        : It's a connection to the database that is used here to insert stuff in.
@@ -160,6 +161,7 @@ func InsertNewBroker(con *sql.DB, broker InsertBroker) (int, error) {
 	if err != nil {
 		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	if _, err := stmt.Exec(broker.Ip, broker.Port, time.Now(), broker.Ip, broker.Port); err != nil {
 		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
@@ -170,15 +172,18 @@ func InsertNewBroker(con *sql.DB, broker InsertBroker) (int, error) {
 	if err != nil {
 		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(broker.Ip, broker.Port)
 	if err != nil {
 		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer rows.Close()
 
 	rows.Next()
 	var ID int
 	rows.Scan(&ID);
+
 
 	return ID, nil
 }
@@ -336,10 +341,11 @@ type InsertUser struct {
 	Outsider bool
 }
 
-// | Date of change | By        | Comment             |
-// +----------------+-----------+---------------------+
-// | 2025-05-22     | Polariusz | Created             |
-// | 2025-06-04     | Polariusz | Added the ID return |
+// | Date of change | By        | Comment                                                   |
+// +----------------+-----------+-----------------------------------------------------------+
+// | 2025-05-22     | Polariusz | Created                                                   |
+// | 2025-06-04     | Polariusz | Added the ID return                                       |
+// | 2025-06-05     | Polariusz | Fixed the selection error and added stmt and rows closing |
 //
 // # Arguments
 // - con *sql.DB     : It's a connection to the database that is used here to insert stuff in.
@@ -368,24 +374,36 @@ func InsertNewUser(con *sql.DB, user InsertUser) (int, error) {
 	if err != nil {
 		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	if _, err := stmt.Exec(user.BrokerId, user.ClientId, user.Username, user.Password, user.Outsider, time.Now()); err != nil {
 		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
-	stmt, err = con.Prepare("SELECT ID FROM User WHERE BrokerId = ? AND ClientID = ? AND Username = ? AND Password = ? AND Outsider = ?")
+	stmt, err = con.Prepare(`
+		SELECT ID
+		FROM User
+		WHERE
+		  BrokerId = ?
+		AND
+		  ClientID = ?
+		AND
+		  Username = ?
+		AND
+		  Password = ?
+		AND
+		  Outsider = ?
+	`)
 	if err != nil {
 		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
-
-	rows, err := con.Query(strconv.Itoa(user.BrokerId), user.ClientId, user.Username, user.Password, user.Outsider)
-	if err != nil {
-		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
-	}
-
-	rows.Next()
 	var userId int
-	rows.Scan(&userId)
+	defer stmt.Close()
+	err = stmt.QueryRow(strconv.Itoa(user.BrokerId), user.ClientId, user.Username, user.Password, user.Outsider).Scan(&userId)
+	if err != nil {
+		fmt.Printf("select stmt exec error %s\n", err)
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
 
 	return userId, nil
 }
