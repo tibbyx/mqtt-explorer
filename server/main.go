@@ -227,7 +227,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"InternalServerError" : "Error while inserting in the Broker table",
-				"Error" : err,
+				"Error" : err.Error(),
 			})
 		}
 
@@ -235,7 +235,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"InternalServerError" : "Error while inserting in the User table",
-				"Error" : err,
+				"Error" : err.Error(),
 			})
 		}
 
