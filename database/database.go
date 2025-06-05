@@ -677,11 +677,13 @@ func SelectTopicsByBrokerIdAndUserId(con *sql.DB, brokerId int, userId int) ([]S
 	if err != nil {
 		return nil, fmt.Errorf("Error while preparing the statement.\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(brokerId, userId)
 	if err != nil {
 		return nil, fmt.Errorf("Error while quering the statement.\nErr: %s\n", err)
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var topic SelectTopic

@@ -11,6 +11,25 @@ import (
 	"time"
 )
 
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-06-05     | Polariusz | Created |
+//
+// # Structure:
+// - {"BrokerId":<B>,"UserId":<U>}
+//   - <B> : The ID of the Broker ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
+//   - <U> : The ID of the User ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
+//
+// # Used in
+// - type TopicsWrapper struct
+//
+// # Author
+// - Polariusz
+type BrokerUser struct {
+	BrokerId int
+	UserId int
+}
+
 // # Author
 // - Polariusz
 const BADJSON = "I am nowt sowwy >:3. An expected! ewwow has happened. Youw weak json! iws of the wwongest fowmat thawt does nowt cowwespond tuwu the stwong awnd independent stwuct! >:P"
@@ -267,10 +286,11 @@ func validateCredentials(errorMessage *string, userCreds *MqttCredentials) int {
 	return 0
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Polariusz | Created       |
-// | 2025-05-13     | Polariusz | Documentation |
+// | Date of change | By        | Comment          |
+// +----------------+-----------+------------------+
+// |                | Polariusz | Created          |
+// | 2025-05-13     | Polariusz | Documentation    |
+// | 2025-06-05     | Polariusz | Added BrokerUser |
 //
 // # Structure:
 // - {"Topics":<T>}
@@ -285,6 +305,7 @@ func validateCredentials(errorMessage *string, userCreds *MqttCredentials) int {
 // # Author
 // - Polariusz
 type TopicsWrapper struct {
+	BrokerUserIDs BrokerUser
 	Topics []string
 }
 
@@ -339,16 +360,18 @@ type TopicResult struct {
 // - 400 (Bad Request): JSON
 //   - {"badJson":`const BADJSON`}
 // - 401 (Unauthorized): JSON
-//   - {"401":"You fool!"}
+//   - {"Unauthorized":"The MQTT-Client is not connected to any brokers."}
+// - 500 (Internal Server Error): JSON
+//   - {"InternalServerError":"Error while selecting topics from the database","Error":"<E>"}
+//     - <E> : SQL-Error message
 //
 // # Author
 // - Polariusz
 func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if serverState.userCreds.Ip == "" {
+		if !serverState.mqttClient.IsConnectionOpen() {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				// TODO: Explain the message a bit more
-				"401": "You fool!",
+				"Unauthorized": "The MQTT-Client is not connected to any brokers.",
 			})
 		}
 
@@ -360,24 +383,40 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 			})
 		}
 
-		// TODO: Validate topics (if they are empty)
+		dbTopicList, err := database.SelectTopicsByBrokerIdAndUserId()
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"InternalServerError": "Error while selecting topics from the database",
+				"Error": err.Error(),
+			})
+		}
+
+		// TODO: Validate topics (for example if they are empty)
 
 		topicResult := make(map[string]TopicResult)
 		atLeastOneBadTopic := false
 
-		for _, topic := range subscribeTopics.Topics {
-			if !slices.Contains(serverState.subscribedTopics, topic) {
+		for index, topic := range subscribeTopics.Topics {
+			topicStatus := getTopicSubscribedStatus(dbTopicList, topic)
+			if topicStatus == 0 {
+				// not subscribed
 				if token := serverState.mqttClient.Subscribe(topic, 0, nil); token.Wait() && token.Error() != nil {
-					atLeastOneBadTopic = true
 					topicResult[topic] = TopicResult{"Error", "Make sure that the topic conforms the MQTT-Broker configuration."}
 				} else {
+					// TODO: SubscribeTopic
 					topicResult[topic] = TopicResult{"Fine", "Subscribed to the topic"}
-					serverState.subscribedTopics = append(serverState.subscribedTopics, topic)
-					serverState.allKnownTopics = append(serverState.allKnownTopics, topic)
 				}
-			} else {
-				atLeastOneBadTopic = true
+			} else if topicStatus == 1 {
+				// subscribed
 				topicResult[topic] = TopicResult{"What", "The topic is already subscribed"}
+			} else {
+				// does not exist
+				if token := serverState.mqttClient.Subscribe(topic, 0, nil); token.Wait() && token.Error() != nil {
+					topicResult[topic] = TopicResult{"Error", "Make sure that the topic conforms the MQTT-Broker configuration."}
+				} else {
+					// TODO: insert new topic
+					topicResult[topic] = TopicResult{"Fine", "Subscribed to the topic"}
+				}
 			}
 		}
 
@@ -391,6 +430,15 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 			"result": topicResult,
 		})
 	}
+}
+
+func getTopicSubscribedStatus(existingTopics []database.SelectTopic, newTopic string) int {
+	for index, topic := range existingTopics {
+		if topic.Topic == newTopic {
+			return existingTopics[index].Subscribed
+		}
+	}
+	return -1
 }
 
 // | Date of change | By        | Comment                |
