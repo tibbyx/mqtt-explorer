@@ -13,6 +13,25 @@ import (
 	"strconv"
 )
 
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-06-05     | Polariusz | Created |
+//
+// # Structure:
+// - {"BrokerId":<B>,"UserId":<U>}
+//   - <B> : The ID of the Broker ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
+//   - <U> : The ID of the User ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
+//
+// # Used in
+// - type TopicsWrapper struct
+//
+// # Author
+// - Polariusz
+type BrokerUser struct {
+	BrokerId int
+	UserId int
+}
+
 // # Author
 // - Polariusz
 const BADJSON = "I am nowt sowwy >:3. An expected! ewwow has happened. Youw weak json! iws of the wwongest fowmat thawt does nowt cowwespond tuwu the stwong awnd independent stwuct! >:P"
