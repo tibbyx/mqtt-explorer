@@ -891,7 +891,7 @@ func createMessageHandler(serverState *ServerState, brokerId int) mqtt.MessageHa
 			fullMessage.Message = string(msg.Payload())
 		}
 
-		topicList, err := database.SelectTopicsByBrokerIdAndUserId(serverState.con, fullMessage.BrokerId, fullMessage.UserId)
+		topicList, err := database.SelectTopicsByBrokerId(serverState.con, fullMessage.BrokerId)
 		if err != nil {
 			fmt.Printf("Error while selecting topics by broker id and user id\nError: %s\n", err)
 			return

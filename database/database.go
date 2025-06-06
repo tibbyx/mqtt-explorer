@@ -572,6 +572,7 @@ func SelectUsersByClientId(con *sql.DB, clientId string) ([]SelectUser, error) {
 // - SelectSubscribedTopics()
 // - SelectUnsubscribedTopics()
 // - SelectTopicsByBrokerIdAndUserId()
+// - SelectTopicsByBrokerId()
 //
 // # Author
 // - Polariusz
@@ -738,6 +739,58 @@ func SelectTopicsByBrokerIdAndUserId(con *sql.DB, brokerId int, userId int) ([]S
 	defer stmt.Close()
 
 	rows, err := stmt.Query(brokerId, userId)
+	if err != nil {
+		return nil, fmt.Errorf("Error while quering the statement.\nErr: %s\n", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var topic SelectTopic
+		rows.Scan(&topic.Id, &topic.UserId, &topic.BrokerId, &topic.Subscribed, &topic.Topic, &topic.CreationDate)
+		topicList = append(topicList, topic)
+	}
+
+	return topicList, nil
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-06-06     | Polariusz | Created |
+//
+// # Arguments
+// - con *sql.DB : It's a connection to the database that is used here to insert stuff in.
+// - brokerId    : Unique Identifier of table `Broker.ID`
+//
+// # Description
+// - The function shall return an array of all known Topics matched with arguments `brokerId`
+//
+// # Tables Affected
+// - Topic
+//   - SELECT
+//
+// # Returns
+// - error when:
+//   - Skill Issues
+//   - Table Topic does not exists
+//     - Use the `SetupDatabase()` function to set the database up before calling this function.
+//
+// # Author
+// - Polariusz
+func SelectTopicsByBrokerId(con *sql.DB, brokerId int) ([]SelectTopic, error) {
+	var topicList []SelectTopic
+
+	stmt, err := con.Prepare(`
+		SELECT *
+		FROM Topic
+		WHERE
+			BrokerId = ?
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("Error while preparing the statement.\nErr: %s\n", err)
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(brokerId)
 	if err != nil {
 		return nil, fmt.Errorf("Error while quering the statement.\nErr: %s\n", err)
 	}
