@@ -343,7 +343,22 @@ curl localhost:3000/topic/all-known
 
 ### To send a message:
 ```bash
-curl --request POST --header "Content-Type: application/json" --data '{"Topic" : "<TOPIC>", "Message" : "<MESSAGE>"}' localhost:3000/topic/send-message
+curl --request POST --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":"<BROKER-ID>","UserId":"<USER-ID>"},{"Topic":"<TOPIC>","Message":"<MESSAGE>"}}'' localhost:3000/topic/send-message
+```
+
+#### Or in other words, you need to POST into localhost:3000/topic/subscribe a JSON with this format:
+```javascript
+{
+  "BrokerUserIds" :
+  {
+    "BrokerId" : "<BROKER-ID>",
+    "UserId" : "<USER-ID>"
+  },
+  {
+    "Topic" : "<TOPIC>",
+    "Message" : "<MESSAGE>"
+  }
+}
 ```
 
 #### If the client has not log in with the credentials, the server will return a 401 (Unauthorized) with a JSON:

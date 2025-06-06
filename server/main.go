@@ -690,15 +690,18 @@ func GetTopicSubscribedHandler(serverState *ServerState) fiber.Handler {
 	}
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Polariusz | Created       |
-// | 2025-05-13     | Polariusz | Documentation |
+// | Date of change | By        | Comment          |
+// +----------------+-----------+------------------+
+// |                | Polariusz | Created          |
+// | 2025-05-13     | Polariusz | Documentation    |
+// | 2025-06-06     | Polariusz | Added BrokerUser |
 //
 // # Structure:
-// - {"Topic":<T>,"Message":"<M>"}
-//   - <T>: Topic
-//   - <M>: Message
+// - {"BrokerUserIds":{"BrokerId":<B>,"UserId":<U>},"Topic":<T>,"Message":"<M>"}
+//   - <B> : The ID of the Broker ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
+//   - <U> : The ID of the User ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
+//   - <T> : Topic
+//   - <M> : Message
 //
 // # Used in
 // - PostTopicSendMessageHandler()
@@ -706,14 +709,16 @@ func GetTopicSubscribedHandler(serverState *ServerState) fiber.Handler {
 // # Author
 // - Polariusz
 type MessageWrapper struct {
+	BrokerUserIds BrokerUser
 	Topic string // TODO: This could be converted to a string array if you wish for the publich messages method to send the same message to multiple topics.
 	Message string
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Polariusz | Created       |
-// | 2025-05-13     | Polariusz | Documentation |
+// | Date of change | By        | Comment           |
+// +----------------+-----------+-------------------+
+// |                | Polariusz | Created           |
+// | 2025-05-13     | Polariusz | Documentation     |
+// | 2025-06-06     | Polariusz | Integrated wit DB |
 //
 // # Method-Type
 // - Handler
@@ -740,10 +745,9 @@ type MessageWrapper struct {
 // - Polariusz
 func PostTopicSendMessageHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if serverState.userCreds.Ip == "" {
+		if !serverState.mqttClient.IsConnectionOpen() {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				// TODO: Explain the message a bit more
-				"401": "You fool!",
+				"Unauthorized": "The MQTT-Client is not connected to any brokers.",
 			})
 		}
 
@@ -758,7 +762,7 @@ func PostTopicSendMessageHandler(serverState *ServerState) fiber.Handler {
 		// TODO: Validate topic and message!
 
 		// TODO: This can be changed to check if the MQTT-Broker responds! Publish() method returns a token, and the token has method Wait() that waits for the respose and Error() that has either nil or an actual error.
-		serverState.mqttClient.Publish(messageWrapper.Topic, 0, false, messageWrapper.Message)
+		serverState.mqttClient.Publish(messageWrapper.Topic, 0, false, messageBuilder(messageWrapper.BrokerUserIds, messageWrapper.Message))
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"goodJson": "Message posted",
