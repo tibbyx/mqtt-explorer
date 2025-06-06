@@ -868,7 +868,7 @@ func createMessageHandler(serverState *ServerState, brokerId int) mqtt.MessageHa
 		topicId := -1
 
 		var fullMessage JsonPublishMessage
-		if err := json.Unmarshal(payload, fullMessage); err != nil {
+		if err := json.Unmarshal(payload, &fullMessage); err != nil {
 			fullMessage.BrokerId = brokerId;
 			fullMessage.UserId = -1;
 			fullMessage.Message = string(msg.Payload())
