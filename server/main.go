@@ -639,6 +639,7 @@ func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 // +----------------+-----------+---------------+
 // |                | Polariusz | Created       |
 // | 2025-05-13     | Polariusz | Documentation |
+// | 2025-06-06     | Polariusz | Integrated DB |
 //
 // # Method-Type
 // - Handler
@@ -646,30 +647,49 @@ func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 // # Description
 // - The method shall be a handler that allows to get a list of subscribed topics. These topics will be strings or simply string array.
 // - The method shall return a 200 (Ok) with the subscribed topics.
+// - The method shall accept a jsonified structure that follows the struct BrokerUser.
 //
 // # Usage
 // - Call declared by the routing method addRoutes() URL with the GET-Method.
 //
 // # Returns
 // - 200 (Ok): JSON
-//   - {"topics":`serverState.subscribedTopics`}
+//   - {"topics":`[]database.SelectTopic`}
 // - 401 (Unauthorized): JSON
 //   - The go server was never connected to the MQTT-Broker.
-//   - {"401":"You fool!"}
+//   - {"Unauthorized":"The MQTT-Client is not connected to any brokers."}
+// - 500 (Internal Server Error)
+// - 500 (Internal Server Error): JSON
+//   - {"InternalServerError":"Error while selecting subscribed topics from database","Error":"<SQL-ERROR-MESSAGE>"}
 //
 // # Author
 // - Polariusz
 func GetTopicSubscribedHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if serverState.userCreds.Ip == "" {
+		if !serverState.mqttClient.IsConnectionOpen() {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				// TODO: Explain the message a bit more
-				"401": "You fool!",
+				"Unauthorized": "The MQTT-Client is not connected to any brokers.",
+			})
+		}
+
+		var brokerUser BrokerUser
+
+		if err := c.BodyParser(&brokerUser); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"badJson": BADJSON,
+			})
+		}
+
+		topicList, err := database.SelectSubscribedTopics(serverState.con, brokerUser.BrokerId, brokerUser.UserId)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"InternalServerError" : "Error while selecting subscribed topics from database",
+				"Error" : err.Error(),
 			})
 		}
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"topics": serverState.subscribedTopics,
+			"topics": topicList,
 		})
 	}
 }

@@ -299,16 +299,29 @@ curl --request POST --header "Content-Type: application/json" --data '{"BrokerUs
 
 ### To get the subcribed list:
 ```bash
-curl localhost:3000/topic/subscribed
+curl -X GET --header "Content-Type: application/json" --data '{"BrokerId":<BROKER-ID>, "UserId":<USER-ID>}' localhost:3000/topic/subscribed
 ```
 
 #### Or in other words, you need to GET into localhost:3000/topic/unsubscribe
-_There is no need for anything to send._
+```javascript
+{
+  "BrokerId" : <BROKER-ID>,
+  "UserId" : <USER-ID>
+},
+```
 
 #### If the client has not log in with the credentials, the server will return a 401 (Unauthorized) with a JSON:
 ```javascript
 {
   "401" : "You fool!"
+}
+```
+
+#### If the server encounters a database error, it will return a 500 (Internal Server Error) with a JSON:
+```javascript
+{
+  "InternalServerError" : "Error while selecting topics from database",
+  "Error" : "<SQL-ERROR-MESSAGE>"
 }
 ```
 
