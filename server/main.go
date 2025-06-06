@@ -173,6 +173,7 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 // | 2025-05-13     | Polariusz | Documentation         |
 // | 2025-06-04     | Polariusz | Integrated DB         |
 // | 2025-06-05     | Polariusz | Updated documentation |
+// | 2025-06-06     | Polariusz | Added auto subs       |
 //
 // # Method-Type
 // - Handler
@@ -190,9 +191,10 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 //
 // # Returns
 // - 200 (Ok): JSON
-//   - {"goodJson":"Connecting to `Ip`:`Port` succeded", "brokerId":"<B>", "userId":"<U>"}
-//     - <B>: This is the ID of the ROW from table Broker. The client needs to remember it and use it for the other functions.
-//     - <U>: This is the ID of the ROW from table User. The client needs to remember it and use it for the other functions.
+//   - {"goodJson":"Connecting to `Ip`:`Port` succeded", "brokerId":"<B>", "userId":"<U>", "subscribedTopics":[<ST>]}
+//     - <B>  : This is the ID of the ROW from table Broker. The client needs to remember it and use it for the other functions.
+//     - <U>  : This is the ID of the ROW from table User. The client needs to remember it and use it for the other functions.
+//     - <ST> : It's the result from SelectSubscribedTopics() matched to data arguments <B> and <U>. Please take a look at `database.SelectTopic` struct.
 // - 400 (Bad Request): JSON
 //   - {"badJson":`const BADJSON`}
 //   - {"badJson":`errorMessage`}
@@ -278,6 +280,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 			"goodJson" : fmt.Sprintf("Connecting to %s:%s succeded", userCreds.Ip, userCreds.Port),
 			"brokerId" : brokerId,
 			"userId" : userId,
+			"subscribedTopics" : topicList,
 		})
 	}
 }
