@@ -258,6 +258,20 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 			})
 		}
 
+		topicList, err := database.SelectSubscribedTopics(serverState.con, brokerId, userId)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"InternalServerError" : "Error while selecting subscribed topics",
+				"Error" : err.Error(),
+			})
+		}
+		
+		for _, topicToSub := range topicList {
+			if token := serverState.mqttClient.Subscribe(topicToSub.Topic, 0, nil); token.Wait() && token.Error() != nil {
+				fmt.Printf("ERROR: Subscribtion to topic %s failed!\n", topicToSub)
+			}
+		}
+
 		serverState.mqttClient = mqttClient
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
