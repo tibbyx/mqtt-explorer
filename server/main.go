@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"strconv"
 )
 
 // | Date of change | By        | Comment |
@@ -77,16 +78,19 @@ type ServerState struct {
 	con *sql.DB
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Polariusz | Created       |
-// | 2025-05-13     | Polariusz | Documentation |
+// | Date of change | By        | Comment                     |
+// +----------------+-----------+-----------------------------+
+// |                | Polariusz | Created                     |
+// | 2025-05-13     | Polariusz | Documentation               |
+// | 2025-06-04     | Polariusz | Added Username and Password |
 //
 // # Structure:
-// - {"Ip":<I>,"Port":"<P>","ClientId":<C>}
-//   - <I>: The IP of the MQTT-Broker.
-//   - <P>: The Port that the MQTT-Broker opened for the protocol.
-//   - <C>: Client ID that functions as an username. It makes the users distinct.
+// - {"Ip":<I>,"Port":"<Po>","ClientId":"<C>","Username":"<U>","Password":"<Pa>"}
+//   - <I> : The IP of the MQTT-Broker.
+//   - <Po>: The Port that the MQTT-Broker opened for the protocol.
+//   - <C> : Client ID that functions as an username. It makes the users distinct.
+//   - <U> : Username for the broker, it's optional
+//   - <Pa>: Password for the broker, it's optional
 //
 // # Used in
 // - struct ServerState
@@ -100,6 +104,8 @@ type MqttCredentials struct {
 	Ip string
 	Port string // TODO: It would be probably nice to store it as a numeric.
 	ClientId string
+	Username string
+	Password string
 }
 
 // # Author
@@ -161,10 +167,12 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Get("/topic/favourites", GetTopicFavourites(serverState))
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Polariusz | Created       |
-// | 2025-05-13     | Polariusz | Documentation |
+// | Date of change | By        | Comment               |
+// +----------------+-----------+-----------------------+
+// |                | Polariusz | Created               |
+// | 2025-05-13     | Polariusz | Documentation         |
+// | 2025-06-04     | Polariusz | Integrated DB         |
+// | 2025-06-05     | Polariusz | Updated documentation |
 //
 // # Method-Type
 // - Handler
@@ -182,12 +190,18 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 //
 // # Returns
 // - 200 (Ok): JSON
-//   - {"goodJson":"Connecting to `Ip`:`Port` succeded"}
+//   - {"goodJson":"Connecting to `Ip`:`Port` succeded", "brokerId":"<B>", "userId":"<U>"}
+//     - <B>: This is the ID of the ROW from table Broker. The client needs to remember it and use it for the other functions.
+//     - <U>: This is the ID of the ROW from table User. The client needs to remember it and use it for the other functions.
 // - 400 (Bad Request): JSON
 //   - {"badJson":`const BADJSON`}
 //   - {"badJson":`errorMessage`}
 // - 404 (Not Found): JSON
 //   - {"badMqtt":"Connecting to `Ip`:`Port` failed"}
+// - 500 (Internal Server Error): JSON
+//   - {"InternalServerError" : "Error while inserting in the <T> table", "Error" : "<E>"}
+//     - <T> : It can be Broker or User
+//     - <E> : SQL Error message
 //
 // # Author
 // - Polariusz
@@ -226,19 +240,39 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 			})
 		}
 
-		serverState.userCreds = userCreds
+		// Skipping err, as this should be validated in the validation function.
+		port, _ := strconv.Atoi(userCreds.Port)
+		brokerId, err := database.InsertNewBroker(serverState.con, database.InsertBroker{userCreds.Ip, port})
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"InternalServerError" : "Error while inserting in the Broker table",
+				"Error" : err.Error(),
+			})
+		}
+
+		userId, err := database.InsertNewUser(serverState.con, database.InsertUser{brokerId, userCreds.ClientId, userCreds.Username, userCreds.Password, false})
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"InternalServerError" : "Error while inserting in the User table",
+				"Error" : err.Error(),
+			})
+		}
+
 		serverState.mqttClient = mqttClient
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"goodJson": fmt.Sprintf("Connecting to %s:%s succeded", userCreds.Ip, userCreds.Port),
+			"goodJson" : fmt.Sprintf("Connecting to %s:%s succeded", userCreds.Ip, userCreds.Port),
+			"brokerId" : brokerId,
+			"userId" : userId,
 		})
 	}
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Polariusz | Created       |
-// | 2025-05-13     | Polariusz | Documentation |
+// | Date of change | By        | Comment                  |
+// +----------------+-----------+--------------------------+
+// |                | Polariusz | Created                  |
+// | 2025-05-13     | Polariusz | Documentation            |
+// | 2025-06-05     | Polariusz | Improved Port validation |
 //
 // # Method-Type
 // - Validator
@@ -246,6 +280,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 // # Description
 // - The method shall validate the argument `userCreds *MqttCredentials`.
 //   - TODO: The validation need to be improved. Right now it only checks if the argument userCreds has empty strings.
+//           The Port has now a better validation.
 //
 // # Usage
 // - Call the method with argument errorMessage if you want to know a more detailed error message and the userCreds that the user has inputted when logging in.
@@ -276,6 +311,20 @@ func validateCredentials(errorMessage *string, userCreds *MqttCredentials) int {
 			*errorMessage = "PORT is incomprehensible"
 		}
 		return 2
+	}
+	port, err := strconv.Atoi(userCreds.Port);
+	if err != nil {
+		if errorMessage != nil {
+			*errorMessage = "PORT cannot be converted to int"
+		}
+		return 2;
+	}
+
+	if port < 0 || port > 65535 {
+		if errorMessage != nil {
+			*errorMessage = "PORT is not between 0 and 65535"
+		}
+		return 2;
 	}
 
 	// VALIDATE CLIENTID

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 	_ "github.com/mattn/go-sqlite3"
+	"strconv"
 )
 
 const databaseName string = "mqtt-client-database.db"
@@ -128,9 +129,11 @@ type InsertBroker struct {
 	Port int
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-21     | Polariusz | Created |
+// | Date of change | By        | Comment                          |
+// +----------------+-----------+----------------------------------+
+// | 2025-05-21     | Polariusz | Created                          |
+// | 2025-06-04     | Polariusz | Added the ID return              |
+// | 2025-06-05     | Polariusz | fix: added stmt and rows closing |
 //
 // # Arguments
 // - con *sql.DB        : It's a connection to the database that is used here to insert stuff in.
@@ -139,29 +142,50 @@ type InsertBroker struct {
 // # Description
 // - The function shall insert the argument `broker` with the current date into table Broker from connected to database argument `con`.
 // - The insertion shall only happen if the `broker` is not in the database.
+// - The function shall return the ID of the inserted broker.
 //
 // # Tables Affected
 // - Broker
 //   - INSERT
-//   - SELECT (Subquery)
+//   - SELECT
 //
 // # Returns
+// - int: it's the ID from table Broker that match the arguments `broker`. It will be -1 if an error has accured.
 // - error if something bad happened. It can happen if the database that is connected does not have table Broker. In this case, please use functions `OpenDatabase()` and `SetupDatabase()` to set-up the database.
 //
 // # Author
 // - Polariusz
-func InsertNewBroker(con *sql.DB, broker InsertBroker) error {
+func InsertNewBroker(con *sql.DB, broker InsertBroker) (int, error) {
 	// I insert the arg broker while checking if it isn't in the database. If it is, the insertion will not happen.
 	stmt, err := con.Prepare("INSERT INTO Broker(Ip, Port, CreationDate) SELECT ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM Broker WHERE Ip = ? AND Port = ?)");
 	if err != nil {
-		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	if _, err := stmt.Exec(broker.Ip, broker.Port, time.Now(), broker.Ip, broker.Port); err != nil {
-		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
-	return nil
+	// I want to get the ID of it.
+	stmt, err = con.Prepare("SELECT ID from Broker WHERE Ip = ? AND Port = ?");
+	if err != nil {
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(broker.Ip, broker.Port)
+	if err != nil {
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+	defer rows.Close()
+
+	rows.Next()
+	var ID int
+	rows.Scan(&ID);
+
+
+	return ID, nil
 }
 
 // | Date of change | By        | Comment |
@@ -317,9 +341,11 @@ type InsertUser struct {
 	Outsider bool
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-22     | Polariusz | Created |
+// | Date of change | By        | Comment                                                   |
+// +----------------+-----------+-----------------------------------------------------------+
+// | 2025-05-22     | Polariusz | Created                                                   |
+// | 2025-06-04     | Polariusz | Added the ID return                                       |
+// | 2025-06-05     | Polariusz | Fixed the selection error and added stmt and rows closing |
 //
 // # Arguments
 // - con *sql.DB     : It's a connection to the database that is used here to insert stuff in.
@@ -327,30 +353,59 @@ type InsertUser struct {
 //
 // # Description
 // - The function shall insert the argument `user` with the current date into table User from connected to database argument `con`.
+// - The function shall return the ID of the table User that match the inserted argument `user`.
 //
 // # Tables Affected
 // - User
 //   - INSERT
+//   - SELECT
 //
 // # Returns
+// - int: it's the ID from table User that match the arguments `user`. It will be -1 if an error has accured.
 // - Can return error if the con isn't connected or if it doesn't have table User. In this case, please use functions `OpenDatabase()` and `SetupDatabase()` to set-up the database.
 //
 // # Author
 // - Polariusz
-func InsertNewUser(con *sql.DB, user InsertUser) error {
+func InsertNewUser(con *sql.DB, user InsertUser) (int, error) {
 	stmt, err := con.Prepare(`
 		INSERT INTO User(BrokerId, ClientId, Username, Password, Outsider, CreationDate) VALUES (?, ?, ?, ?, ?, ?)
 	`);
 
 	if err != nil {
-		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	if _, err := stmt.Exec(user.BrokerId, user.ClientId, user.Username, user.Password, user.Outsider, time.Now()); err != nil {
-		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
-	return nil
+	stmt, err = con.Prepare(`
+		SELECT ID
+		FROM User
+		WHERE
+		  BrokerId = ?
+		AND
+		  ClientID = ?
+		AND
+		  Username = ?
+		AND
+		  Password = ?
+		AND
+		  Outsider = ?
+	`)
+	if err != nil {
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+	var userId int
+	defer stmt.Close()
+	err = stmt.QueryRow(strconv.Itoa(user.BrokerId), user.ClientId, user.Username, user.Password, user.Outsider).Scan(&userId)
+	if err != nil {
+		fmt.Printf("select stmt exec error %s\n", err)
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	return userId, nil
 }
 
 // | Date of change | By        | Comment |
