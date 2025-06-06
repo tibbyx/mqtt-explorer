@@ -373,7 +373,7 @@ func InsertNewUser(con *sql.DB, user InsertUser) (int, error) {
 		SELECT ?, ?, ?, ?, ?, ?
 		WHERE NOT EXISTS(
 			SELECT 1
-			FROM Broker
+			FROM User
 			WHERE
 			  BrokerId = ?
 			AND
