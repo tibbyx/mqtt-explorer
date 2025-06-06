@@ -297,14 +297,14 @@ curl --request POST --header "Content-Type: application/json" --data '{"BrokerUs
 
 ### To get the subcribed list:
 ```bash
-curl -X GET --header "Content-Type: application/json" --data '{"BrokerId":"<BROKER-ID>", "UserId":"<USER-ID>"}' localhost:3000/topic/subscribed
+curl -X GET --header "Content-Type: application/json" --data '{"BrokerId":<BROKER-ID>, "UserId":<USER-ID>}' localhost:3000/topic/subscribed
 ```
 
 #### Or in other words, you need to GET into localhost:3000/topic/unsubscribe
 ```javascript
 {
-  "BrokerId" : "<BROKER-ID>",
-  "UserId" : "<USER-ID>"
+  "BrokerId" : <BROKER-ID>,
+  "UserId" : <USER-ID>
 },
 ```
 
