@@ -823,7 +823,7 @@ func InsertNewTopic(con *sql.DB, topic InsertTopic) error {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
-	if _, err := stmt.Exec(topic.UserId, topic.BrokerId, topic.Subscribed, topic.Topic, time.Now()); err != nil {
+	if _, err := stmt.Exec(topic.UserId, topic.BrokerId, topic.Subscribed, topic.Topic, time.Now(), topic.UserId, topic.BrokerId, topic.Topic); err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
