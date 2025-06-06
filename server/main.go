@@ -837,9 +837,10 @@ func GetPingHandler(serverState *ServerState) fiber.Handler {
 	}
 }
 
-// | Date of change | By     | Comment                 |
-// +----------------+--------+-------------------------+
-// | 2025-05-14     | Tibbyx | Created & Documentation |
+// | Date of change | By        | Comment                 |
+// +----------------+-----------+-------------------------+
+// | 2025-05-14     | Tibbyx    | Created & Documentation |
+// | 2025-06-06     | Polariusz | Integrated with DB      |
 //
 // # Method-Type
 // - MQTT Handler Factory
@@ -862,7 +863,14 @@ func GetPingHandler(serverState *ServerState) fiber.Handler {
 func createMessageHandler(serverState *ServerState) mqtt.MessageHandler {
 	return func(client mqtt.Client, msg mqtt.Message) {
 		topic := msg.Topic()
-		payload := string(msg.Payload())
+		payload := msg.Payload()
+
+		var fullMessage JsonPublishMessage
+		if err := json.Unmarshal(msg.Payload(), fullMessage); err != nil {
+			fullMessage.BrokerId = -1;
+			fullMessage.UserId = -1;
+			fullMessage.Message = string(msg.Payload())
+		}
 
 		fmt.Printf("Received message: %s from topic: %s\n", payload, topic)
 
