@@ -268,13 +268,13 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 			})
 		}
 		
+		serverState.mqttClient = mqttClient
+
 		for _, topicToSub := range topicList {
 			if token := serverState.mqttClient.Subscribe(topicToSub.Topic, 0, nil); token.Wait() && token.Error() != nil {
 				fmt.Printf("ERROR: Subscribtion to topic %s failed!\n", topicToSub)
 			}
 		}
-
-		serverState.mqttClient = mqttClient
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"goodJson" : fmt.Sprintf("Connecting to %s:%s succeded", userCreds.Ip, userCreds.Port),
