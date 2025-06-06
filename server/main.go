@@ -3,6 +3,7 @@ package main
 import (
 	"database"
 	"database/sql"
+	"encoding/json"
 
 	"github.com/gofiber/fiber/v2"
 	"fmt"
@@ -36,18 +37,32 @@ type BrokerUser struct {
 // - Polariusz
 const BADJSON = "I am nowt sowwy >:3. An expected! ewwow has happened. Youw weak json! iws of the wwongest fowmat thawt does nowt cowwespond tuwu the stwong awnd independent stwuct! >:P"
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-13     | Polariusz | Created |
+// | Date of change | By        | Comment              |
+// +----------------+-----------+----------------------+
+// | 2025-05-13     | Polariusz | Created              |
+// | 2025-06-06     | Polariusz | Actually implemented |
 //
 // # Description
-// - This method shall build a message containing the Client-ID and the Message that the messagePubHandler will be able to then differentiate and write into the database accordingly.
+// - This method shall build a message containing the BrokerId, UserId and the Message that the messagePubHandler will be able to then differentiate and write into the database accordingly.
 //
 // # Author
 // - Polariusz
-func messageBuilder(creds MqttCredentials, message string) string {
+func messageBuilder(brokerUserIds BrokerUser, message string) []byte {
 	// TODO: We need to think of a structure for categorising messages with the clientIds (Usernames).
-	return message
+	fullMessage := struct {
+		BrokerId int
+		UserId int
+		Message string
+	} {
+		brokerUserIds.BrokerId,
+		brokerUserIds.UserId,
+		message,
+	}
+	
+	// ignoring error as the structure above cannot fail to marshal
+	jsonMessage, _ := json.Marshal(fullMessage)
+
+	return jsonMessage
 }
 
 // | Date of change | By        | Comment               |
@@ -725,7 +740,7 @@ func PostTopicSendMessageHandler(serverState *ServerState) fiber.Handler {
 		// TODO: Validate topic and message!
 
 		// TODO: This can be changed to check if the MQTT-Broker responds! Publish() method returns a token, and the token has method Wait() that waits for the respose and Error() that has either nil or an actual error.
-		serverState.mqttClient.Publish(messageWrapper.Topic, 0, false, messageBuilder(serverState.userCreds, messageWrapper.Message))
+		serverState.mqttClient.Publish(messageWrapper.Topic, 0, false, messageWrapper.Message)
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"goodJson": "Message posted",
