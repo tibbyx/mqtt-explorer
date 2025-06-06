@@ -965,7 +965,7 @@ func DeleteTopic(con *sql.DB, topicId int) error {
 // | UserId int             | UserId INTEGER        |
 // | TopicId int            | TopicId INTEGER       |
 // | BrokerId int           | BrokerId INTEGER      |
-// | QoS int                | QoS TINYINT           |
+// | QoS byte               | QoS TINYINT           |
 // | Message string         | Message TEXT          |
 // |                        | CreationDate DateTime |
 //
@@ -978,7 +978,7 @@ type InsertMessage struct {
 	UserId int
 	TopicId int
 	BrokerId int
-	QoS int
+	QoS byte
 	Message string
 }
 
