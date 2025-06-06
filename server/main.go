@@ -848,8 +848,7 @@ func GetPingHandler(serverState *ServerState) fiber.Handler {
 // # Description
 // - The method shall create and return an MQTT message handler.
 // - The handler processes incoming MQTT messages from subscribed topics.
-// - The payloads are stored in the in-memory map receivedMessages within the ServerState.
-// - The topic string is used as key, and messages are appended as values (string slices).
+// - The handler uses the JsonPublishString structure for messages
 //
 // # Usage
 // - Used in PostCredentialsHandler() to assign the MQTT client’s default message handler.
@@ -864,17 +863,36 @@ func createMessageHandler(serverState *ServerState) mqtt.MessageHandler {
 	return func(client mqtt.Client, msg mqtt.Message) {
 		topic := msg.Topic()
 		payload := msg.Payload()
+		qos := msg.Qos()
+		topicId := -1
 
 		var fullMessage JsonPublishMessage
-		if err := json.Unmarshal(msg.Payload(), fullMessage); err != nil {
+		if err := json.Unmarshal(payload, fullMessage); err != nil {
 			fullMessage.BrokerId = -1;
 			fullMessage.UserId = -1;
 			fullMessage.Message = string(msg.Payload())
+			topicId = -1;
 		}
 
-		fmt.Printf("Received message: %s from topic: %s\n", payload, topic)
+		topicList, err := database.SelectTopicsByBrokerIdAndUserId(serverState.con, fullMessage.BrokerId, fullMessage.UserId)
+		if err != nil {
+			fmt.Printf("Error while selecting topics by broker id and user id")
+			return
+			// db error
+		}
+		for _, dbTopic := range topicList {
+			if dbTopic.Topic == topic {
+				topicId = dbTopic.Id
+			}
+		}
 
-		serverState.receivedMessages[topic] = append(serverState.receivedMessages[topic], payload)
+		fmt.Printf("Received message: %s from topic: %s\n", fullMessage, topic)
+
+		if err := database.InsertNewMessage(serverState.con, database.InsertMessage{fullMessage.UserId, topicId, fullMessage.BrokerId, qos, fullMessage.Message}); err != nil {
+			// db error
+			fmt.Printf("Error while inserting new message")
+			return
+		}
 	}
 }
 
