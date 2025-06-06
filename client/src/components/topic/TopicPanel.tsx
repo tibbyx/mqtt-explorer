@@ -22,7 +22,7 @@ interface TopicPanelProps {
 }
 
 export default function TopicPanel({
-                                       topics,
+                                       /*topics*/
                                        selectedTopic,
                                        onSelectTopic,
                                        onCreateTopic,
@@ -37,16 +37,16 @@ export default function TopicPanel({
     const [editingName, setEditingName] = useState("");
     const [localTopics, setLocalTopics] = useState<Topic[]>([]);
     const [showTopics, setShowTopics] = useState(true);
-    const {fetchTopics /*topics*/, error, isLoading} = useTopics()
-
-    useEffect(() => {
-        setLocalTopics(topics);
-    }, [topics]);
+    const {fetchTopics, topics, error, isLoading} = useTopics()
 
     /*    useEffect(() => {
-            fetchTopics()
-            console.log("Fetched Topics: ", topics)
-        }, [fetchTopics]);*/
+            setLocalTopics(topics);
+        }, [topics]);*/
+
+    useEffect(() => {
+        fetchTopics()
+        console.log("Fetched Topics: ", topics)
+    }, [fetchTopics]);
 
     const handleCreateSubmit = (e: React.FormEvent) => {
         e.preventDefault();
