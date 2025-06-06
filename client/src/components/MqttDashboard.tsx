@@ -79,7 +79,7 @@ function MqttDashboard() {
 
     return (
         <div className={"flex flex-col h-screen"}>
-            <Header onSearch={handleSearch}/>
+            <Header onSearch={handleSearch} isConnected={isConnected}/>
             <div className={"flex flex-1 overflow-hidden"}>
                 <TopicPanel
                     topics={filteredTopics}
