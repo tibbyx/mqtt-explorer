@@ -346,6 +346,7 @@ type InsertUser struct {
 // | 2025-05-22     | Polariusz | Created                                                   |
 // | 2025-06-04     | Polariusz | Added the ID return                                       |
 // | 2025-06-05     | Polariusz | Fixed the selection error and added stmt and rows closing |
+// | 2025-06-06     | Polariusz | Changed the insertion to only happen if it is unique      |
 //
 // # Arguments
 // - con *sql.DB     : It's a connection to the database that is used here to insert stuff in.
@@ -368,7 +369,23 @@ type InsertUser struct {
 // - Polariusz
 func InsertNewUser(con *sql.DB, user InsertUser) (int, error) {
 	stmt, err := con.Prepare(`
-		INSERT INTO User(BrokerId, ClientId, Username, Password, Outsider, CreationDate) VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO User(BrokerId, ClientId, Username, Password, Outsider, CreationDate)
+		SELECT ?, ?, ?, ?, ?, ?
+		WHERE NOT EXISTS(
+			SELECT 1
+			FROM User
+			WHERE
+			  BrokerId = ?
+			AND
+			  ClientID = ?
+			AND
+			  Username = ?
+			AND
+			  Password = ?
+			AND
+			  Outsider = ?
+			LIMIT 1
+		)
 	`);
 
 	if err != nil {
@@ -376,7 +393,7 @@ func InsertNewUser(con *sql.DB, user InsertUser) (int, error) {
 	}
 	defer stmt.Close()
 
-	if _, err := stmt.Exec(user.BrokerId, user.ClientId, user.Username, user.Password, user.Outsider, time.Now()); err != nil {
+	if _, err := stmt.Exec(user.BrokerId, user.ClientId, user.Username, user.Password, user.Outsider, time.Now(), user.BrokerId, user.ClientId, user.Username, user.Password, user.Outsider); err != nil {
 		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
