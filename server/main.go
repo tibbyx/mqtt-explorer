@@ -33,6 +33,27 @@ type BrokerUser struct {
 	UserId int
 }
 
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-06-06     | Polariusz | Created |
+//
+// # Structure:
+// - {"BrokerId":<B>,"UserId":<U>,"Message":<Message>}
+//   - <B> : The ID of the Broker ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
+//   - <U> : The ID of the User ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
+//   - <M> : Published Message
+//
+// # Used in
+// - messageBuilder()
+//
+// # Author
+// - Polariusz
+type JsonPublishMessage struct {
+	BrokerId int
+	UserId int
+	message string
+}
+
 // # Author
 // - Polariusz
 const BADJSON = "I am nowt sowwy >:3. An expected! ewwow has happened. Youw weak json! iws of the wwongest fowmat thawt does nowt cowwespond tuwu the stwong awnd independent stwuct! >:P"
@@ -49,11 +70,7 @@ const BADJSON = "I am nowt sowwy >:3. An expected! ewwow has happened. Youw weak
 // - Polariusz
 func messageBuilder(brokerUserIds BrokerUser, message string) []byte {
 	// TODO: We need to think of a structure for categorising messages with the clientIds (Usernames).
-	fullMessage := struct {
-		BrokerId int
-		UserId int
-		Message string
-	} {
+	fullMessage := JsonPublishMessage {
 		brokerUserIds.BrokerId,
 		brokerUserIds.UserId,
 		message,
