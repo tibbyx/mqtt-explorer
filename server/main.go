@@ -51,7 +51,7 @@ type BrokerUser struct {
 type JsonPublishMessage struct {
 	BrokerId int
 	UserId int
-	message string
+	Message string
 }
 
 // # Author
