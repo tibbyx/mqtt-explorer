@@ -257,21 +257,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 			}
 		}
 
-		// test.mosquitto.org
-		mqttOpts := mqtt.NewClientOptions().AddBroker(fmt.Sprintf("tcp://%s:%s", userCreds.Ip, userCreds.Port)).SetClientID(userCreds.ClientId)
-		mqttOpts.SetKeepAlive(2 * time.Second)
-		mqttOpts.SetPingTimeout(1 * time.Second)
-
-		mqttOpts.SetDefaultPublishHandler(createMessageHandler(serverState))
-
-		mqttClient := mqtt.NewClient(mqttOpts)
-
-		if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"badJson": fmt.Sprintf("Connecting to %s:%s failed\n%s", userCreds.Ip, userCreds.Port, token.Error()),
-			})
-		}
-
+		// NOTE: I do this before to get the brokerId for the createMessageHandler.
 		// Skipping err, as this should be validated in the validation function.
 		port, _ := strconv.Atoi(userCreds.Port)
 		brokerId, err := database.InsertNewBroker(serverState.con, database.InsertBroker{userCreds.Ip, port})
@@ -279,6 +265,21 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"InternalServerError" : "Error while inserting in the Broker table",
 				"Error" : err.Error(),
+			})
+		}
+
+		// test.mosquitto.org
+		mqttOpts := mqtt.NewClientOptions().AddBroker(fmt.Sprintf("tcp://%s:%s", userCreds.Ip, userCreds.Port)).SetClientID(userCreds.ClientId)
+		mqttOpts.SetKeepAlive(2 * time.Second)
+		mqttOpts.SetPingTimeout(1 * time.Second)
+
+		mqttOpts.SetDefaultPublishHandler(createMessageHandler(serverState, brokerId))
+
+		mqttClient := mqtt.NewClient(mqttOpts)
+
+		if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"badJson": fmt.Sprintf("Connecting to %s:%s failed\n%s", userCreds.Ip, userCreds.Port, token.Error()),
 			})
 		}
 
@@ -859,7 +860,7 @@ func GetPingHandler(serverState *ServerState) fiber.Handler {
 //
 // # Author
 // - Tibbyx
-func createMessageHandler(serverState *ServerState) mqtt.MessageHandler {
+func createMessageHandler(serverState *ServerState, brokerId int) mqtt.MessageHandler {
 	return func(client mqtt.Client, msg mqtt.Message) {
 		topic := msg.Topic()
 		payload := msg.Payload()
@@ -868,29 +869,28 @@ func createMessageHandler(serverState *ServerState) mqtt.MessageHandler {
 
 		var fullMessage JsonPublishMessage
 		if err := json.Unmarshal(payload, fullMessage); err != nil {
-			fullMessage.BrokerId = -1;
+			fullMessage.BrokerId = brokerId;
 			fullMessage.UserId = -1;
 			fullMessage.Message = string(msg.Payload())
-			topicId = -1;
 		}
 
 		topicList, err := database.SelectTopicsByBrokerIdAndUserId(serverState.con, fullMessage.BrokerId, fullMessage.UserId)
 		if err != nil {
-			fmt.Printf("Error while selecting topics by broker id and user id")
+			fmt.Printf("Error while selecting topics by broker id and user id\nError: %s\n", err)
 			return
-			// db error
 		}
 		for _, dbTopic := range topicList {
 			if dbTopic.Topic == topic {
 				topicId = dbTopic.Id
 			}
 		}
+		// NOTE: The TopicId shouldn't be -1 still, because we only get messages with targetted topic when we are subscribed to these topics, so we know these topics!
 
 		fmt.Printf("Received message: %s from topic: %s\n", fullMessage, topic)
 
 		if err := database.InsertNewMessage(serverState.con, database.InsertMessage{fullMessage.UserId, topicId, fullMessage.BrokerId, qos, fullMessage.Message}); err != nil {
 			// db error
-			fmt.Printf("Error while inserting new message")
+			fmt.Printf("Error while inserting new message\nError: %s\n", err)
 			return
 		}
 	}
