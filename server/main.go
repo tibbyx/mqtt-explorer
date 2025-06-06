@@ -519,6 +519,7 @@ func getTopicSubscribedStatus(existingTopics []database.SelectTopic, newTopic st
 // |                | Polariusz | Created                |
 // | 2025-05-13     | Polariusz | Documentation          |
 // | 2025-05-16     | Polariusz | Changed one 400 to 207 |
+// | 2025-06-05     | Polariusz | Integrated database    |
 //
 // # Method-Type
 // - Handler
@@ -544,15 +545,16 @@ func getTopicSubscribedStatus(existingTopics []database.SelectTopic, newTopic st
 //   - {"badJson":`const BADJSON`}
 // - 401 (Unauthorized): JSON
 //   - {"401":"You fool!"}
+// - 500 (Internal Server Error): JSON
+//   - {"InternalServerError":"Error while selecting topics from database","Error":"<SQL-ERROR-MESSAGE>"}
 //
 // # Author
 // - Polariusz
 func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if serverState.userCreds.Ip == "" {
+		if !serverState.mqttClient.IsConnected() {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				// TODO: Explain the message a bit more
-				"401": "You fool!",
+				"Unauthorized": "The MQTT-Client is not connected with the Broker.",
 			})
 		}
 
@@ -569,22 +571,36 @@ func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 		topicResult := make(map[string]TopicResult)
 		atLeastOneBadTopic := false
 
+		dbTopics, err := database.SelectTopicsByBrokerIdAndUserId(serverState.con, unsubscribeTopics.BrokerUserIDs.BrokerId, unsubscribeTopics.BrokerUserIDs.UserId)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"InternalServerError" : "Error while selecting topics from database",
+				"Error" : err.Error(),
+			})
+		}
+
 		for _, topic := range unsubscribeTopics.Topics {
-			if !slices.Contains(serverState.subscribedTopics, topic) {
-				topicResult[topic] = TopicResult{"What", "The topic wasn't even subscribed"}
-				atLeastOneBadTopic = true
-			} else {
-				// unsubscribe from mqtt-broker
-				serverState.mqttClient.Unsubscribe(topic)
-				// add fine to the map
-				topicResult[topic] = TopicResult{"Fine", "Unsubscribed successfully"}
-				// Find the topic in the array and remove it.
-				for index, stateTopic := range serverState.subscribedTopics {
-					if strings.Compare(stateTopic, topic) == 0 {
-						serverState.subscribedTopics = append(serverState.subscribedTopics[:index], serverState.subscribedTopics[index+1:]...)
-						break
+			innerBad := false
+			for _, dbTopic := range dbTopics {
+				if dbTopic.Topic == topic {
+					// found matching topic
+					if dbTopic.Subscribed {
+						// The matched topic is subscribed
+						serverState.mqttClient.Unsubscribe(topic)
+						database.UnsubscribeTopic(serverState.con, dbTopic.Id)
+						topicResult[topic] = TopicResult{"Fine", "Unsubscribed successfully"}
+
+					} else {
+						// The topic matches, but is not subscribed
+						atLeastOneBadTopic = true
+						topicResult[topic] = TopicResult{"What", "The topic wasn't even subscribed"}
 					}
 				}
+			}
+			if innerBad == true {
+				// The topic does not exist
+				atLeastOneBadTopic = true
+				topicResult[topic] = TopicResult{"ClientError", "The topic does not exist"}
 			}
 		}
 

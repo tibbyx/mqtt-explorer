@@ -205,18 +205,31 @@ curl --request POST --header "Content-Type: application/json" --data '{"BrokerUs
 
 ### To unsubscribe to a topic or multiple at once:
 ```
-curl --request POST --header "Content-Type: application/json" --data '{"Topics":["<TOPIC-1>", "<TOPIC-2>", "<TOPIC-N>"]}' localhost:3000/topic/unsubscribe
+curl --request POST --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":"<BROKER-ID>", "UserId":"<USER-ID>"},"Topics":["<TOPIC-1>", "<TOPIC-2>", "<TOPIC-N>"]}' localhost:3000/topic/unsubscribe
 ```
 
 #### Or in other words, you need to POST into localhost:3000/topic/unsubscribe a JSON with this format:
 ```javascript
 {
+  "BrokerUserIds" :
+  {
+    "BrokerId" : "<BROKER-ID>",
+    "UserId" : "<USER-ID>"
+  },
   "Topics" :
   [
     "<TOPIC-1>",
     "<TOPIC-2>",
     "<TOPIC-N>"
   ]
+}
+```
+
+#### If the server encounters a database error, it will return a 500 (Internal Server Error) with a JSON:
+```javascript
+{
+  "InternalServerError" : "Error while selecting topics from database",
+  "Error" : "<SQL-ERROR-MESSAGE>"
 }
 ```
 
