@@ -95,10 +95,12 @@ curl --request POST --header "Content-Type: application/json" --data '{"Ip" : "<
 {
   "goodJson" : "Connecting to <IP>:<PORT> succeded",
   "brokerId" : <BROKER-ID>,
-  "userId" : <USER-ID>
+  "userId" : <USER-ID>,
+  "subscribedTopics" : [<SELECT-TOPIC-N>]
 }
 ```
 Note that the client needs to remember the <BROKER-ID> and <USER-ID>.
+Take a look at `database.SelectTopic` struct for the subscribed topic structure.
 
 ### To disconnect from the MQTT-Broker:
 ```bash
