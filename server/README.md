@@ -358,7 +358,7 @@ curl localhost:3000/topic/all-known
 
 ### To send a message:
 ```bash
-curl --request POST --header "Content-Type: application/json" --data '{"Topic" : "<TOPIC>", "Message" : "<MESSAGE>"}' localhost:3000/topic/send-message
+curl --request POST --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":<B>,"UserId":<U>},"Topic":<T>,"Message":"<M>"}' localhost:3000/topic/send-message
 ```
 
 #### If the client has not log in with the credentials, the server will return a 401 (Unauthorized) with a JSON:

@@ -241,6 +241,7 @@ func SelectBrokerList(con *sql.DB) ([]SelectBroker, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var Id int
@@ -286,11 +287,13 @@ func SelectBrokerByIpAndPort(con *sql.DB, ip string, port int) (SelectBroker, er
 	if err != nil {
 		return fullBroker, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(ip, port)
 	if err != nil {
 		return fullBroker, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer rows.Close()
 
 	rows.Next()
 	var Id int
@@ -414,8 +417,9 @@ func InsertNewUser(con *sql.DB, user InsertUser) (int, error) {
 	if err != nil {
 		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
-	var userId int
 	defer stmt.Close()
+
+	var userId int
 	err = stmt.QueryRow(strconv.Itoa(user.BrokerId), user.ClientId, user.Username, user.Password, user.Outsider).Scan(&userId)
 	if err != nil {
 		fmt.Printf("select stmt exec error %s\n", err)
@@ -485,18 +489,20 @@ func SelectUserById(con *sql.DB, id int) (SelectUser, error) {
 	var user SelectUser
 
 	stmt, err := con.Prepare(`
-		SELECT ID, BrokerId, ClientId, UserrName, Outsider, CreationDate
+		SELECT ID, BrokerId, ClientId, Username, Outsider, CreationDate
 		FROM User
 		WHERE ID = ?
 	`)
 	if err != nil {
 		return user, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(id)
 	if err != nil {
 		return user, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer rows.Close()
 
 	if !rows.Next() {
 		return user, fmt.Errorf("Table User matched to Id: %d yelded no results.\n", id)
@@ -538,18 +544,20 @@ func SelectUsersByClientId(con *sql.DB, clientId string) ([]SelectUser, error) {
 	var userList []SelectUser
 
 	stmt, err := con.Prepare(`
-		SELECT ID, BrokerId, ClientId, UserrName, Outsider, CreationDate
+		SELECT ID, BrokerId, ClientId, Username, Outsider, CreationDate
 		FROM User
 		WHERE ClientId = ?
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(clientId)
 	if err != nil {
 		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer rows.Close()
 
 	tableIsEmpty := true
 	for rows.Next() {
@@ -564,6 +572,27 @@ func SelectUsersByClientId(con *sql.DB, clientId string) ([]SelectUser, error) {
 	}
 
 	return userList, nil
+}
+
+func SelectUserByClientIdAndBrokerId(con *sql.DB, clientId string, brokerId int) (SelectUser, error) {
+	var user SelectUser
+
+	stmt, err := con.Prepare(`
+		SELECT ID, BrokerId, ClientId, Username, Outsider, CreationDate
+		FROM User
+		WHERE ClientId = ?
+		AND BrokerId = ?
+	`)
+	if err != nil {
+		return user, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+	defer stmt.Close()
+
+	if err := stmt.QueryRow(clientId, brokerId).Scan(&user.Id, &user.BrokerId, &user.ClientId, &user.Username, &user.Outsider, &user.CreationDate); err != nil {
+		return user, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	return user, nil
 }
 
 /*                                       +-------+                                       */
@@ -589,6 +618,7 @@ func SelectUsersByClientId(con *sql.DB, clientId string) ([]SelectUser, error) {
 // - SelectSubscribedTopics()
 // - SelectUnsubscribedTopics()
 // - SelectTopicsByBrokerIdAndUserId()
+// - SelectTopicsByBrokerId()
 //
 // # Author
 // - Polariusz
@@ -699,11 +729,13 @@ func SelectUnsubscribedTopics(con *sql.DB, brokerId int, userId int) ([]SelectTo
 	if err != nil {
 		return nil, fmt.Errorf("Error while preparing the statement.\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(brokerId, userId)
 	if err != nil {
 		return nil, fmt.Errorf("Error while quering the statement.\nErr: %s\n", err)
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var topic SelectTopic
@@ -755,6 +787,58 @@ func SelectTopicsByBrokerIdAndUserId(con *sql.DB, brokerId int, userId int) ([]S
 	defer stmt.Close()
 
 	rows, err := stmt.Query(brokerId, userId)
+	if err != nil {
+		return nil, fmt.Errorf("Error while quering the statement.\nErr: %s\n", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var topic SelectTopic
+		rows.Scan(&topic.Id, &topic.UserId, &topic.BrokerId, &topic.Subscribed, &topic.Topic, &topic.CreationDate)
+		topicList = append(topicList, topic)
+	}
+
+	return topicList, nil
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-06-06     | Polariusz | Created |
+//
+// # Arguments
+// - con *sql.DB : It's a connection to the database that is used here to insert stuff in.
+// - brokerId    : Unique Identifier of table `Broker.ID`
+//
+// # Description
+// - The function shall return an array of all known Topics matched with arguments `brokerId`
+//
+// # Tables Affected
+// - Topic
+//   - SELECT
+//
+// # Returns
+// - error when:
+//   - Skill Issues
+//   - Table Topic does not exists
+//     - Use the `SetupDatabase()` function to set the database up before calling this function.
+//
+// # Author
+// - Polariusz
+func SelectTopicsByBrokerId(con *sql.DB, brokerId int) ([]SelectTopic, error) {
+	var topicList []SelectTopic
+
+	stmt, err := con.Prepare(`
+		SELECT *
+		FROM Topic
+		WHERE
+			BrokerId = ?
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("Error while preparing the statement.\nErr: %s\n", err)
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(brokerId)
 	if err != nil {
 		return nil, fmt.Errorf("Error while quering the statement.\nErr: %s\n", err)
 	}
@@ -839,6 +923,7 @@ func InsertNewTopic(con *sql.DB, topic InsertTopic) error {
 	if err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	if _, err := stmt.Exec(topic.UserId, topic.BrokerId, topic.Subscribed, topic.Topic, time.Now(), topic.UserId, topic.BrokerId, topic.Topic); err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
@@ -879,6 +964,7 @@ func SubscribeTopic(con *sql.DB, topicId int) error {
 	if err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	if _, err := stmt.Exec(topicId); err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
@@ -919,6 +1005,7 @@ func UnsubscribeTopic(con *sql.DB, topicId int) error {
 	if err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	if _, err := stmt.Exec(topicId); err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
@@ -958,6 +1045,7 @@ func DeleteTopic(con *sql.DB, topicId int) error {
 	if err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	if _, err := stmt.Exec(topicId); err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
@@ -982,7 +1070,7 @@ func DeleteTopic(con *sql.DB, topicId int) error {
 // | UserId int             | UserId INTEGER        |
 // | TopicId int            | TopicId INTEGER       |
 // | BrokerId int           | BrokerId INTEGER      |
-// | QoS int                | QoS TINYINT           |
+// | QoS byte               | QoS TINYINT           |
 // | Message string         | Message TEXT          |
 // |                        | CreationDate DateTime |
 //
@@ -995,7 +1083,7 @@ type InsertMessage struct {
 	UserId int
 	TopicId int
 	BrokerId int
-	QoS int
+	QoS byte
 	Message string
 }
 
@@ -1031,6 +1119,7 @@ func InsertNewMessage(con *sql.DB, message InsertMessage) error {
 	if err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	if _, err := stmt.Exec(message.UserId, message.TopicId, message.BrokerId, message.QoS, message.Message, time.Now()); err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
@@ -1112,11 +1201,13 @@ func SelectMessagesByTopicIdAndBrokerId(con *sql.DB, topicId int, brokerId int) 
 	if err != nil {
 		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(topicId, brokerId)
 	if err != nil {
 		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var selectMessage SelectMessage
@@ -1178,11 +1269,13 @@ func SelectMessagesByTopicIdBrokerIdAndIndex(con *sql.DB, topicId int, brokerId 
 	if err != nil {
 		return nil, fmt.Errorf("Error while preparing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(topicId, brokerId, index, LIMIT_MESSAGES, index, LIMIT_MESSAGES)
 	if err != nil {
 		return nil, fmt.Errorf("Error while querying the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var selectMessage SelectMessage
@@ -1262,11 +1355,13 @@ func SelectFavouriteTopicsByUserId(con *sql.DB, userId int) ([]SelectFavTopic, e
 	if err != nil {
 		return nil, fmt.Errorf("Error while preparing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(userId)
 	if err != nil {
 		return nil, fmt.Errorf("Error while querying the database!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var favTopic SelectFavTopic
@@ -1311,6 +1406,7 @@ func InsertFavouriteTopic(con *sql.DB, userId int, topicId int) error {
 	if err != nil {
 		return fmt.Errorf("Error while preparing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
+	defer stmt.Close()
 
 	if _, err := stmt.Exec(userId); err != nil {
 		return fmt.Errorf("Error while executing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
@@ -1354,6 +1450,7 @@ func DeleteFavouriteTopic(con *sql.DB, userId int, topicId int) error {
 	if err != nil {
 		return fmt.Errorf("Error while preparing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
+	defer stmt.Close()
 
 	if _, err := stmt.Exec(userId); err != nil {
 		return fmt.Errorf("Error while executing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)

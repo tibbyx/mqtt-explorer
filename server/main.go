@@ -49,8 +49,7 @@ type BrokerUser struct {
 // # Author
 // - Polariusz
 type JsonPublishMessage struct {
-	BrokerId int
-	UserId int
+	ClientId string
 	Message string
 }
 
@@ -68,11 +67,9 @@ const BADJSON = "I am nowt sowwy >:3. An expected! ewwow has happened. Youw weak
 //
 // # Author
 // - Polariusz
-func messageBuilder(brokerUserIds BrokerUser, message string) []byte {
-	// TODO: We need to think of a structure for categorising messages with the clientIds (Usernames).
+func messageBuilder(clientId string, message string) []byte {
 	fullMessage := JsonPublishMessage {
-		brokerUserIds.BrokerId,
-		brokerUserIds.UserId,
+		clientId,
 		message,
 	}
 	
@@ -259,21 +256,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 			}
 		}
 
-		// test.mosquitto.org
-		mqttOpts := mqtt.NewClientOptions().AddBroker(fmt.Sprintf("tcp://%s:%s", userCreds.Ip, userCreds.Port)).SetClientID(userCreds.ClientId)
-		mqttOpts.SetKeepAlive(2 * time.Second)
-		mqttOpts.SetPingTimeout(1 * time.Second)
-
-		mqttOpts.SetDefaultPublishHandler(createMessageHandler(serverState))
-
-		mqttClient := mqtt.NewClient(mqttOpts)
-
-		if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"badJson": fmt.Sprintf("Connecting to %s:%s failed\n%s", userCreds.Ip, userCreds.Port, token.Error()),
-			})
-		}
-
+		// NOTE: I do this before to get the brokerId for the createMessageHandler.
 		// Skipping err, as this should be validated in the validation function.
 		port, _ := strconv.Atoi(userCreds.Port)
 		brokerId, err := database.InsertNewBroker(serverState.con, database.InsertBroker{userCreds.Ip, port})
@@ -281,6 +264,21 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"InternalServerError" : "Error while inserting in the Broker table",
 				"Error" : err.Error(),
+			})
+		}
+
+		// test.mosquitto.org
+		mqttOpts := mqtt.NewClientOptions().AddBroker(fmt.Sprintf("tcp://%s:%s", userCreds.Ip, userCreds.Port)).SetClientID(userCreds.ClientId)
+		mqttOpts.SetKeepAlive(2 * time.Second)
+		mqttOpts.SetPingTimeout(1 * time.Second)
+
+		mqttOpts.SetDefaultPublishHandler(createMessageHandler(serverState, brokerId))
+
+		mqttClient := mqtt.NewClient(mqttOpts)
+
+		if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"badJson": fmt.Sprintf("Connecting to %s:%s failed\n%s", userCreds.Ip, userCreds.Port, token.Error()),
 			})
 		}
 
@@ -439,6 +437,7 @@ type TopicResult struct {
 // |                | Polariusz | Created                |
 // | 2025-05-13     | Polariusz | Documentation          |
 // | 2025-05-16     | Polariusz | Changed one 400 to 207 |
+// | 2025-06-06     | Polariusz | Integrated Database    |
 //
 // # Method-Type
 // - Handler
@@ -726,13 +725,14 @@ func GetTopicSubscribedHandler(serverState *ServerState) fiber.Handler {
 	}
 }
 
-// | Date of change | By        | Comment       |
-// +----------------+-----------+---------------+
-// |                | Polariusz | Created       |
-// | 2025-05-13     | Polariusz | Documentation |
+// | Date of change | By        | Comment          |
+// +----------------+-----------+------------------+
+// |                | Polariusz | Created          |
+// | 2025-05-13     | Polariusz | Documentation    |
+// | 2025-06-06     | Polariusz | Added BrokerUser |
 //
 // # Structure:
-// - {"Topic":<T>,"Message":"<M>"}
+// - {"BrokerUserIds":{"BrokerId":<B>,"UserId":<U>},"Topic":<T>,"Message":"<M>"}
 //   - <T>: Topic
 //   - <M>: Message
 //
@@ -742,6 +742,7 @@ func GetTopicSubscribedHandler(serverState *ServerState) fiber.Handler {
 // # Author
 // - Polariusz
 type MessageWrapper struct {
+	BrokerUserIds BrokerUser
 	Topic string // TODO: This could be converted to a string array if you wish for the publich messages method to send the same message to multiple topics.
 	Message string
 }
@@ -776,10 +777,9 @@ type MessageWrapper struct {
 // - Polariusz
 func PostTopicSendMessageHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if serverState.userCreds.Ip == "" {
+		if !serverState.mqttClient.IsConnectionOpen() {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				// TODO: Explain the message a bit more
-				"401": "You fool!",
+				"Unauthorized": "The MQTT-Client is not connected to any brokers.",
 			})
 		}
 
@@ -791,10 +791,18 @@ func PostTopicSendMessageHandler(serverState *ServerState) fiber.Handler {
 			})
 		}
 
+		user, err := database.SelectUserById(serverState.con, messageWrapper.BrokerUserIds.UserId)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"Internal Server Error": "Error while selecting User by ID",
+				"Error" : err.Error(),
+			})
+		}
+
 		// TODO: Validate topic and message!
 
 		// TODO: This can be changed to check if the MQTT-Broker responds! Publish() method returns a token, and the token has method Wait() that waits for the respose and Error() that has either nil or an actual error.
-		serverState.mqttClient.Publish(messageWrapper.Topic, 0, false, messageWrapper.Message)
+		serverState.mqttClient.Publish(messageWrapper.Topic, 0, false, messageBuilder(user.ClientId, messageWrapper.Message))
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"goodJson": "Message posted",
@@ -874,9 +882,10 @@ func GetPingHandler(serverState *ServerState) fiber.Handler {
 	}
 }
 
-// | Date of change | By     | Comment                 |
-// +----------------+--------+-------------------------+
-// | 2025-05-14     | Tibbyx | Created & Documentation |
+// | Date of change | By        | Comment                 |
+// +----------------+-----------+-------------------------+
+// | 2025-05-14     | Tibbyx    | Created & Documentation |
+// | 2025-06-06     | Polariusz | Integrated with DB      |
 //
 // # Method-Type
 // - MQTT Handler Factory
@@ -884,8 +893,7 @@ func GetPingHandler(serverState *ServerState) fiber.Handler {
 // # Description
 // - The method shall create and return an MQTT message handler.
 // - The handler processes incoming MQTT messages from subscribed topics.
-// - The payloads are stored in the in-memory map receivedMessages within the ServerState.
-// - The topic string is used as key, and messages are appended as values (string slices).
+// - The handler uses the JsonPublishString structure for messages
 //
 // # Usage
 // - Used in PostCredentialsHandler() to assign the MQTT client’s default message handler.
@@ -896,14 +904,54 @@ func GetPingHandler(serverState *ServerState) fiber.Handler {
 //
 // # Author
 // - Tibbyx
-func createMessageHandler(serverState *ServerState) mqtt.MessageHandler {
+func createMessageHandler(serverState *ServerState, brokerId int) mqtt.MessageHandler {
 	return func(client mqtt.Client, msg mqtt.Message) {
 		topic := msg.Topic()
-		payload := string(msg.Payload())
+		payload := msg.Payload()
+		qos := msg.Qos()
+		topicId := -1
 
-		fmt.Printf("Received message: %s from topic: %s\n", payload, topic)
+		var jsonPublishMessage JsonPublishMessage
+		if err := json.Unmarshal(payload, &jsonPublishMessage); err != nil {
+			jsonPublishMessage.ClientId = "Unknown"
+			jsonPublishMessage.Message = string(payload)
+		}
 
-		serverState.receivedMessages[topic] = append(serverState.receivedMessages[topic], payload)
+		topicList, err := database.SelectTopicsByBrokerId(serverState.con, brokerId)
+		if err != nil {
+			fmt.Printf("Error while selecting topics by broker id and user id\nError: %s\n", err)
+			return
+		}
+		for _, dbTopic := range topicList {
+			if dbTopic.Topic == topic {
+				topicId = dbTopic.Id
+			}
+		}
+		// NOTE: The TopicId shouldn't be -1 still, because we only get messages with targetted topic when we are subscribed to these topics, so we know these topics!
+
+		var userId int
+		user, err := database.SelectUserByClientIdAndBrokerId(serverState.con, jsonPublishMessage.ClientId, brokerId)
+		if err != nil {
+			// No user found! Outsider!
+			outsiderUserId, err := database.InsertNewUser(serverState.con, database.InsertUser{brokerId, jsonPublishMessage.ClientId, "", "", true})
+			if err != nil {
+				fmt.Printf("Error while inserting outsider.\nError: %s\n", err)
+				return
+			}
+			userId = outsiderUserId
+		} else {
+			userId = user.Id
+		}
+
+		insertNewMessage := database.InsertMessage{userId, topicId, brokerId, qos, jsonPublishMessage.Message}
+
+		fmt.Printf("Inserting into Message with arguments: %s", insertNewMessage)
+
+		if err := database.InsertNewMessage(serverState.con, insertNewMessage); err != nil {
+			// db error
+			fmt.Printf("Error while inserting new message\nError: %s\n", err)
+			return
+		}
 	}
 }
 
