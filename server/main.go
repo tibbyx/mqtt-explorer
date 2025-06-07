@@ -461,6 +461,7 @@ type TopicResult struct {
 //   - {"result":{<TOPIC-N>:{"Status":<STATUS-N>,"Message":<MESSAGE-N>}}}
 // - 400 (Bad Request): JSON
 //   - {"badJson":`const BADJSON`}
+//   - {"terribleJson":"<Arguments are not valid>"}
 // - 401 (Unauthorized): JSON
 //   - {"Unauthorized":"The MQTT-Client is not connected to any brokers."}
 // - 500 (Internal Server Error): JSON
@@ -482,6 +483,12 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 		if err := c.BodyParser(&subscribeTopics); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"badJson": BADJSON,
+			})
+		}
+
+		if subscribeTopics.BrokerUserIDs.BrokerId < 0 || subscribeTopics.BrokerUserIDs.UserId < 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"terribleJson": "Arguments are not valid",
 			})
 		}
 
