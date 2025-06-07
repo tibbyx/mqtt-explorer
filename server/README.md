@@ -339,7 +339,7 @@ curl -X GET --header "Content-Type: application/json" --data '{"BrokerId":<BROKE
 
 ### To get all known topics:
 ```bash
-curl localhost:3000/topic/all-known
+curl -X GET --header "Content-Type: Application/Json" --data '{"BrokerId":<BROKER-ID>,"UserId":<USER-ID>}' localhost:3000/topic/all-known
 ```
 
 #### If the client is not authenticated yet, the server will return a 401 (Unauthorized) with a JSON:
