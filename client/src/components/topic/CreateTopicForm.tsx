@@ -5,11 +5,10 @@ import {Check, X} from "lucide-react";
 
 interface CreateTopicFormProps {
     newTopicName: string;
-    onNewTopicNameChange: (
-        e: React.ChangeEvent<HTMLInputElement>
-    ) => void;
+    onNewTopicNameChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onSubmit: (e: React.FormEvent) => void;
     onCancel: () => void;
+    isSubmitting?: boolean;
 }
 
 export default function CreateTopicForm({
@@ -17,6 +16,7 @@ export default function CreateTopicForm({
                                             onNewTopicNameChange,
                                             onSubmit,
                                             onCancel,
+                                            isSubmitting = false,
                                         }: CreateTopicFormProps) {
     return (
         <form
@@ -29,14 +29,20 @@ export default function CreateTopicForm({
                     value={newTopicName}
                     onChange={onNewTopicNameChange}
                     autoFocus
+                    disabled={isSubmitting}
                     className="h-9 bg-[var(--background)] border border-[var(--border)]"
                 />
                 <Button
                     type="submit"
                     size="sm"
                     className="h-9 px-2"
+                    disabled={isSubmitting || !newTopicName.trim()}
                 >
-                    <Check className="h-4 w-4"/>
+                    {isSubmitting ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"/>
+                    ) : (
+                        <Check className="h-4 w-4"/>
+                    )}
                 </Button>
                 <Button
                     type="button"
@@ -44,6 +50,7 @@ export default function CreateTopicForm({
                     variant="outline"
                     className="h-9 px-2"
                     onClick={onCancel}
+                    disabled={isSubmitting}
                 >
                     <X className="h-4 w-4"/>
                 </Button>

@@ -4,6 +4,7 @@ import {NoTopicSelectedView} from "./NoTopicSelectedView";
 import {MessageTopicHeader} from "./MessageTopicHeader.tsx";
 import {MessagesContainer} from "./MessageContainer";
 import {MessageComposer} from "./MessageComposer";
+import {useMessages} from "@/api/hooks/useMessages.ts";
 
 export interface MessagePanelProps {
     topic: Topic | null;
@@ -17,20 +18,33 @@ export interface MessagePanelProps {
 
 export function MessagePanel({
                                  topic,
-                                 messages,
                                  onPublish,
                                  onSubscribe,
                                  onUnsubscribe,
-                                 isLoading = false,
-                                 error = null,
                              }: MessagePanelProps) {
+    const {
+        messages,
+        isLoading,
+        error,
+        startWatching,
+        stopWatching,
+        refresh,
+    } = useMessages();
 
     const [messageText, setMessageText] = useState("");
     const [publishQosLevel, setPublishQosLevel] = useState<QoSLevel>(0);
-
     const [filterQos, setFilterQos] = useState<QoSLevel | null>(null);
     const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+    // Start/stop watching when topic changes
+    useEffect(() => {
+        if (topic) {
+            startWatching(topic.name);
+        } else {
+            stopWatching();
+        }
+    }, [topic?.name, startWatching, stopWatching]);
 
     useEffect(() => {
         setIsSubscribed(topic?.subscribed ?? null);
@@ -53,6 +67,9 @@ export function MessagePanel({
 
         onPublish(topic.name, messageText.trim(), publishQosLevel);
         setMessageText("");
+
+        // Manual refresh after publishing
+        setTimeout(() => refresh(), 100);
     };
 
     const handleSubscriptionToggle = () => {
@@ -61,8 +78,10 @@ export function MessagePanel({
         const newSubscriptionState = !isSubscribed;
         if (newSubscriptionState) {
             onSubscribe?.(topic.id);
+            startWatching(topic.name);
         } else {
             onUnsubscribe?.(topic.id);
+            stopWatching();
         }
         setIsSubscribed(newSubscriptionState);
     };

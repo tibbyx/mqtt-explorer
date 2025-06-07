@@ -15,15 +15,15 @@ export function useTopics() {
         try {
             const response = await apiClient.get<{ topics: string[] }>(
                 endpoints.subscribedTopics
-            )
+            );
 
             const mappedTopics: Topic[] = response.topics.map((name: any) => ({
                 id: name,
                 name: name,
-                subscribed: true
+                subscribed: true,
             }));
 
-            setTopics(mappedTopics)
+            setTopics(mappedTopics);
             console.log("The Topics are here!", response);
             return response;
         } catch (err) {
@@ -33,12 +33,17 @@ export function useTopics() {
         } finally {
             setIsLoading(false);
         }
-    }, [])
+    }, []);
+
+    const addTopic = useCallback((topic: Topic) => {
+        setTopics(prev => [...prev, topic]);
+    }, []);
 
     return {
         topics,
         isLoading,
         error,
-        fetchTopics
-    }
+        fetchTopics,
+        addTopic,
+    };
 }

@@ -7,6 +7,7 @@ import {ScrollArea} from "../ui/scroll-area";
 import type {Topic} from "@/lib/types.ts";
 import {ChevronDown} from "lucide-react";
 import {useTopics} from "@/api/hooks/useTopics";
+import {useSubscribeTopics} from "@/api/hooks/useSubscribeTopic.ts";
 
 interface TopicPanelProps {
     topics: Topic[];
@@ -33,30 +34,59 @@ export default function TopicPanel({
     const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
     const [editingName, setEditingName] = useState("");
     const [showTopics, setShowTopics] = useState(true);
-    const {fetchTopics, topics, error, isLoading} = useTopics()
+
+    const {fetchTopics, topics, addTopic, error, isLoading} = useTopics();
+    const {
+        subscribeToTopics,
+        isLoading: isSubscribing,
+    } = useSubscribeTopics();
 
     useEffect(() => {
         fetchTopics().catch((error) => {
-            console.error('Failed to fetch topics.', error);
+            console.error("Failed to fetch topics.", error);
         });
         console.log("Fetched Topics: ", topics);
     }, [fetchTopics]);
 
-    const handleCreateSubmit = (e: React.FormEvent) => {
+    const handleCreateSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const trimmed = newTopicName.trim();
-        if (trimmed) {
-            onCreateTopic(trimmed);
-            setNewTopicName("");
-            setIsCreating(false);
+        if (!trimmed) return;
+
+        console.log("Before submit - isCreating:", isCreating); // Debug
+
+        try {
+            const response = await subscribeToTopics([trimmed]);
+            const result = response.result[trimmed];
+
+            if (result.status === "Fine") {
+                const newTopic: Topic = {
+                    id: trimmed,
+                    name: trimmed,
+                    subscribed: true,
+                };
+
+                addTopic(newTopic);
+                onCreateTopic(trimmed);
+
+                console.log("Setting isCreating to false"); // Debug
+                setNewTopicName("");
+                setIsCreating(false);
+
+                console.log("After submit - isCreating should be false"); // Debug
+            } else {
+                console.error("Failed to create topic:", result.message);
+            }
+        } catch (error) {
+            console.error("Error creating topic:", error);
         }
     };
 
     const handleClearTopic = () => {
         onSelectTopic(null);
         const url = new URL(window.location.href);
-        url.searchParams.delete('topic');
-        window.history.pushState({}, '', url.toString());
+        url.searchParams.delete("topic");
+        window.history.pushState({}, "", url.toString());
     };
 
     const handleTopicSelect = (topic: Topic) => {
@@ -66,8 +96,8 @@ export default function TopicPanel({
         } else {
             onSelectTopic(topic);
             const url = new URL(window.location.href);
-            url.searchParams.set('topic', topic.name);
-            window.history.pushState({}, '', url.toString()); // Added this line
+            url.searchParams.set("topic", topic.name);
+            window.history.pushState({}, "", url.toString());
         }
     };
 
@@ -92,7 +122,7 @@ export default function TopicPanel({
 
     const handleRetry = () => {
         fetchTopics().catch((error) => {
-            console.error('Failed to refetch topics.', error);
+            console.error("Failed to refetch topics.", error);
         });
         console.log("Refetched Topics: ", topics);
     };
@@ -115,17 +145,25 @@ export default function TopicPanel({
                 <div className="p-2">
                     <div className="text-center py-8">
                         <div className="text-red-500 mb-2">
-                            <svg className="h-12 w-12 mx-auto mb-2" fill="none" viewBox="0 0 24 24"
-                                 stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                            <svg
+                                className="h-12 w-12 mx-auto mb-2"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+                                />
                             </svg>
                         </div>
                         <p className="text-red-600 dark:text-red-400 mb-2 font-medium">
                             Failed to load topics
                         </p>
                         <p className="text-sm text-gray-500 mb-4">
-                            {error.message || 'An unexpected error occurred'}
+                            {error.message || "An unexpected error occurred"}
                         </p>
                         <Button
                             size="sm"
@@ -182,7 +220,7 @@ export default function TopicPanel({
             {isConnected && (
                 <div
                     className="p-4 h-16 flex items-center justify-between cursor-pointer transition bg-[var(--background)] border-b border-[var(--border)]"
-                    onClick={() => setShowTopics(prev => !prev)}
+                    onClick={() => setShowTopics((prev) => !prev)}
                 >
                     <h2 className="dark:text-gray-200 flex items-center">
                         Topics
@@ -214,12 +252,14 @@ export default function TopicPanel({
                             newTopicName={newTopicName}
                             onNewTopicNameChange={(e) => setNewTopicName(e.target.value)}
                             onSubmit={handleCreateSubmit}
-                            onCancel={() => setIsCreating(false)}
+                            onCancel={() => {
+                                setIsCreating(false);
+                                setNewTopicName("");
+                            }}
+                            isSubmitting={isSubscribing}
                         />
                     )}
-                    <ScrollArea className="flex-1">
-                        {renderTopicsContent()}
-                    </ScrollArea>
+                    <ScrollArea className="flex-1">{renderTopicsContent()}</ScrollArea>
                 </>
             )}
         </div>
