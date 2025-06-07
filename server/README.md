@@ -384,7 +384,7 @@ curl --request POST --header "Content-Type: application/json" --data '{"BrokerUs
 
 ### To get the messages matched to a topic:
 ```bash
-curl -X GET --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":<BROKER-ID>, "UserId":<USER-ID>},"Topic":"<TOPIC>"}' localhost:3000/topic/messages
+curl -X GET --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":<BROKER-ID>, "UserId":<USER-ID>},"Topic":"<TOPIC>","Index":<INDEX>}' localhost:3000/topic/messages
 ```
 
 #### If the <TOPIC> is empty or <USER-ID> is less than 0 or <BROKER-ID> is less than 0, the server will return a 400 (Bad Request) with a JSON:
@@ -565,3 +565,12 @@ curl localhost:3000/topic/favourites
 {
   "Topics":["<TOPIC-1>", "<TOPIC-2>", "<TOPIC-N>"]
 }
+
+### Quick start:
+```bash
+curl -X POST -H "Content-Type: application/json" --data '{"Ip" : "localhost", "Port" : "1883", "ClientId" : "Jot"}' localhost:3000/credentials
+curl -X POST -H "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":1, "UserId":1},"Topics":["Yare", "Starman", "Ora"]}' localhost:3000/topic/subscribe
+curl -X GET -H "Content-Type: application/json" --data '{"BrokerId":1, "UserId":1}' localhost:3000/topic/subscribed
+curl -X POST -H "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":1,"UserId":1},"Topic":"Yare","Message":"Yare yare daze"}' localhost:3000/topic/send-message
+curl -X GET --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":1, "UserId":1},"Topic":"Yare","Index":0}' localhost:3000/topic/messages
+```
