@@ -8,6 +8,7 @@ export interface TopicHeaderProps {
     onSubscriptionToggle: () => void;
     filterQos: QoSLevel | null;
     onFilterChange: (value: string) => void;
+    isLoading?: boolean;
 }
 
 export function MessageTopicHeader({

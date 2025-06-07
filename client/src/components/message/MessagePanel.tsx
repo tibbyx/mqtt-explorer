@@ -11,6 +11,8 @@ export interface MessagePanelProps {
     onPublish: (topic: string, payload: string, qos: QoSLevel) => void;
     onSubscribe?: (topicId: string) => void;
     onUnsubscribe?: (topicId: string) => void;
+    isLoading?: boolean;
+    error?: Error | null;
 }
 
 export function MessagePanel({
@@ -19,6 +21,8 @@ export function MessagePanel({
                                  onPublish,
                                  onSubscribe,
                                  onUnsubscribe,
+                                 isLoading = false,
+                                 error = null,
                              }: MessagePanelProps) {
 
     const [messageText, setMessageText] = useState("");
@@ -78,13 +82,14 @@ export function MessagePanel({
                 onSubscriptionToggle={handleSubscriptionToggle}
                 filterQos={filterQos}
                 onFilterChange={handleQosFilterChange}
+                isLoading={isLoading}
             />
-
             <MessagesContainer
                 ref={messagesContainerRef}
                 messages={filteredMessages}
+                isLoading={isLoading}
+                error={error}
             />
-
             <MessageComposer
                 messageText={messageText}
                 onMessageChange={setMessageText}

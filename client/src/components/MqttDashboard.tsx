@@ -5,16 +5,18 @@ import {ConnectionPanel} from "@/components/connection/ConnectionPanel.tsx";
 import type {Topic} from "@/lib/types.ts";
 import {useMqttWebSocket} from "@/hooks/use-mqtt-websocket.tsx";
 import {useToast} from "../hooks/use-toast"
-import {useState} from "react";
+import {useEffect, useState} from "react";
+import {useMessages} from "@/api/hooks/useMessages.ts";
+import {useTopics} from "@/api/hooks/useTopics.ts";
 
 function MqttDashboard() {
     const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null)
     const [searchQuery, setSearchQuery] = useState("")
     const [isConnected, setIsConnected] = useState(false);
+    const {topics} = useTopics();
+    const {messages, fetchMessages, clearMessages} = useMessages();
     const {toast} = useToast()
     const {
-        messages,
-        topics,
         createTopic,
         deleteTopic,
         renameTopic,
@@ -40,6 +42,48 @@ function MqttDashboard() {
         searchQuery,
     })
 
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const topicFromUrl = urlParams.get('topic');
+
+        if (topicFromUrl && topics.length > 0 && isConnected) {
+            const topic = topics.find(t => t.name === topicFromUrl);
+            if (topic) {
+                setSelectedTopic(topic);
+                // Load messages for this topic
+                fetchMessages(topic.name).catch(console.error);
+            }
+        }
+    }, [topics, isConnected, fetchMessages]);
+
+    useEffect(() => {
+        if (selectedTopic && isConnected) {
+            fetchMessages(selectedTopic.name).catch(console.error);
+        } else {
+            clearMessages();
+        }
+    }, [selectedTopic, isConnected, fetchMessages, clearMessages]);
+
+    const handleTopicSelect = (topic: Topic | null) => {
+        setSelectedTopic(topic);
+
+        if (topic) {
+            // Update URL
+            const url = new URL(window.location.href);
+            url.searchParams.set('topic', topic.name);
+            window.history.pushState({}, '', url.toString());
+
+            // Load messages for selected topic
+            fetchMessages(topic.name).catch(console.error);
+        } else {
+            // Clear URL and messages
+            const url = new URL(window.location.href);
+            url.searchParams.delete('topic');
+            window.history.pushState({}, '', url.toString());
+            clearMessages();
+        }
+    };
+
     // Handle topic subscription
     const handleSubscribe = (topicId: string) => {
         subscribeTopic(topicId)
@@ -50,11 +94,6 @@ function MqttDashboard() {
                 setSelectedTopic({...updatedTopic, subscribed: true})
             }
         }
-    }
-
-    // Handle topic selection
-    const handleTopicSelect = (topic: Topic) => {
-        setSelectedTopic(topic)
     }
 
     const handleToggleConnect = () => {
@@ -79,41 +118,45 @@ function MqttDashboard() {
 
     return (
         <div className={"flex flex-col h-screen"}>
-            <Header onSearch={handleSearch} isConnected={isConnected}/>
+            <Header
+                onSearch={handleSearch}
+                isConnected={isConnected}
+                onToggleConnect={handleToggleConnect}
+            />
             <div className={"flex flex-1 overflow-hidden"}>
-                <TopicPanel
-                    topics={filteredTopics}
-                    selectedTopic={selectedTopic}
-                    onSelectTopic={handleTopicSelect}
-                    onCreateTopic={createTopic}
-                    onDeleteTopic={deleteTopic}
-                    onRenameTopic={renameTopic}
-                    onSubscribe={handleSubscribe}
-                    onUnsubscribe={handleUnsubscribe}
-                    isConnected={isConnected}
-                    onToggleConnect={handleToggleConnect}
-                />
                 {isConnected ? (
-                    selectedTopic ? (
-                        <MessagePanel
-                            topic={selectedTopic}
-                            messages={messages.filter((m) => m.topic === selectedTopic.name)}
-                            onPublish={publishMessage}
+                    <>
+                        <TopicPanel
+                            topics={filteredTopics}
+                            selectedTopic={selectedTopic}
+                            onSelectTopic={handleTopicSelect}
+                            onCreateTopic={createTopic}
+                            onDeleteTopic={deleteTopic}
+                            onRenameTopic={renameTopic}
                             onSubscribe={handleSubscribe}
                             onUnsubscribe={handleUnsubscribe}
+                            isConnected={isConnected}
                         />
-                    ) : (
-                        <div className="flex-1 flex items-center justify-center border-t">
-                            <p>Select a topic to view messages</p>
-                        </div>
-                    )
+                        {selectedTopic ? (
+                            <MessagePanel
+                                topic={selectedTopic}
+                                messages={messages.filter((m) => m.topic === selectedTopic.name)}
+                                onPublish={publishMessage}
+                                onSubscribe={handleSubscribe}
+                                onUnsubscribe={handleUnsubscribe}
+                            />
+                        ) : (
+                            <div className="flex-1 flex items-center justify-center border-t">
+                                <p>Select a topic to view messages</p>
+                            </div>
+                        )}
+                    </>
                 ) : (
                     <ConnectionPanel onToggleConnect={handleToggleConnect}/>
                 )}
-
             </div>
         </div>
-    )
+    );
 }
 
 export default MqttDashboard
