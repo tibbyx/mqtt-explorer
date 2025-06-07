@@ -486,7 +486,7 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 			})
 		}
 
-		if subscribeTopics.BrokerUserIDs.BrokerId < 0 || subscribeTopics.BrokerUserIDs.UserId < 0 {
+		if subscribeTopics.BrokerUserIDs.BrokerId <= 0 || subscribeTopics.BrokerUserIDs.UserId <= 0 {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"terribleJson": "Arguments are not valid",
 			})
