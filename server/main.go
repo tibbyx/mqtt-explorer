@@ -1191,7 +1191,7 @@ func PostDisconnectFromBrokerHandler(serverState *ServerState) fiber.Handler {
 // - Polariusz
 func PostTopicFavouritesMark(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if(serverState.userCreds.Ip == "") {
+		if serverState.mqttClient == nil || !serverState.mqttClient.IsConnected() {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"Message": "Authenticate yourself first!",
 			})
@@ -1260,7 +1260,7 @@ func PostTopicFavouritesMark(serverState *ServerState) fiber.Handler {
 // - Polariusz
 func PostTopicFavouritesUnmark(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if(serverState.userCreds.Ip == "") {
+		if serverState.mqttClient == nil || !serverState.mqttClient.IsConnected() {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"Message": "Authenticate yourself first!",
 			})
@@ -1317,25 +1317,52 @@ func PostTopicFavouritesUnmark(serverState *ServerState) fiber.Handler {
 //
 // # Usage
 // - Call declared by the routing method addRoutes() URL with the GET-Method.
+// - The client shall post a JSON that matches the structure of `BrokerUser`.
 //
 // # Returns
 // - 200 (OK): JSON
 //   - {"Topics":["<TOPIC-1>","<TOPIC-2>","<TOPIC-3>"]}
+// - 400 (Bad Request): JSON
+//   - {"badJson":`BADJSON`}
+//   - {"terribleJSON":"Arguments are not valid"}
 // - 401 (Unauthorized): JSON
 //   - {"Message": "Authenticate yourself first!"}
+// - 500 (Internal Server Error): JSON
+//   - {"InternalServerError":"<SQL-ERROR>"}
 //
 // # Author
 // - Polariusz
 func GetTopicFavourites(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if(serverState.userCreds.Ip == "") {
+		if serverState.mqttClient == nil || !serverState.mqttClient.IsConnected() {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"Message": "Authenticate yourself first!",
 			})
 		}
 
+		var brokerUser BrokerUser
+
+		if err := c.BodyParser(&brokerUser); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"badJson": BADJSON,
+			})
+		}
+
+		if brokerUser.BrokerId < 0 || brokerUser.UserId < 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"terribleJson": "Arguments are not valid",
+			})
+		}
+
+		favTopicList, err := database.SelectFavouriteTopicsByBrokerIdAndUserId(serverState.con, brokerUser.BrokerId, brokerUser.UserId)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"InternalServerError": err.Error(),
+			})
+		}
+
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"Topics":serverState.favouriteTopics,
+			"Topics": favTopicList,
 		})
 	}
 }

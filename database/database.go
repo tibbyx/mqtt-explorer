@@ -1262,13 +1262,15 @@ type SelectFavTopic struct {
 // | Date of change | By        | Comment |
 // +----------------+-----------+---------+
 // | 2025-05-30     | Polariusz | Created |
+// | 2025-06-07     | Polariusz | Created |
 //
 // # Arguments
 // - con *sql.DB : It's a connection to the database.
+// - userId int  : [Broker].[ID]
 // - userId int  : [User].[ID]
 //
 // # Description
-// - The function shall return a list of favourite topics matched with argument `userId` with a `SelectFavTopic` struct array.
+// - The function shall return a list of favourite topics matched with argument `brokerId` and`userId` with a `SelectFavTopic` struct array.
 //
 // # Tables Affected
 // - UserTopicFavourite
@@ -1283,7 +1285,7 @@ type SelectFavTopic struct {
 //
 // # Author
 // - Polariusz
-func SelectFavouriteTopicsByUserId(con *sql.DB, userId int) ([]SelectFavTopic, error) {
+func SelectFavouriteTopicsByBrokerIdAndUserId(con *sql.DB, brokerId int, userId int) ([]SelectFavTopic, error) {
 	var favTopicList []SelectFavTopic
 
 	stmtStr := `
@@ -1291,7 +1293,8 @@ func SelectFavouriteTopicsByUserId(con *sql.DB, userId int) ([]SelectFavTopic, e
 		FROM UserTopicFavourite utf
 		INNER JOIN Topic t
 		ON t.ID = utf.TopicId
-		WHERE utf.UserId = ?
+		WHERE utf.BrokerId = ?
+		AND utf.UserId = ?
 	`
 	stmt, err := con.Prepare(stmtStr)
 	if err != nil {
