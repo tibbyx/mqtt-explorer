@@ -1248,6 +1248,7 @@ func SelectMessagesByTopicIdBrokerIdAndIndex(con *sql.DB, topicId int, brokerId 
 //
 // # Used in
 // - SelectFavouriteTopicsByUserId()
+// - SelectFavouriteTopicsByBrokerIdAndUserId()
 //
 // # Author
 // - Polariusz
@@ -1302,7 +1303,7 @@ func SelectFavouriteTopicsByBrokerIdAndUserId(con *sql.DB, brokerId int, userId 
 	}
 	defer stmt.Close()
 
-	rows, err := stmt.Query(userId)
+	rows, err := stmt.Query(brokerId, userId)
 	if err != nil {
 		return nil, fmt.Errorf("Error while querying the database!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
@@ -1317,17 +1318,19 @@ func SelectFavouriteTopicsByBrokerIdAndUserId(con *sql.DB, brokerId int, userId 
 	return favTopicList, nil
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-30     | Polariusz | Created |
+// | Date of change | By        | Comment                 |
+// +----------------+-----------+-------------------------+
+// | 2025-05-30     | Polariusz | Created                 |
+// | 2025-06-07     | Polariusz | Added argument brokerId |
 //
 // # Arguments
-// - con *sql.DB : It's a connection to the database.
-// - userId int  : [User].[ID]
-// - topicId int : [Topic].[ID]
+// - con *sql.DB  : It's a connection to the database.
+// - brokerId int : [Broker].[ID]
+// - userId int   : [User].[ID]
+// - topicId int  : [Topic].[ID]
 //
 // # Description
-// - The function shall insert the arguments `userId` and `topicId` into the table `UserTopicFavourite`.
+// - The function shall insert the arguments `brokerId`, `userId` and `topicId` into the table `UserTopicFavourite`.
 //
 // # Tables Affected
 // - UserTopicFavourite
@@ -1341,10 +1344,10 @@ func SelectFavouriteTopicsByBrokerIdAndUserId(con *sql.DB, brokerId int, userId 
 //
 // # Author
 // - Polariusz
-func InsertFavouriteTopic(con *sql.DB, userId int, topicId int) error {
+func InsertFavouriteTopic(con *sql.DB, brokerId int, userId int, topicId int) error {
 	stmtStr := `
-		INSERT INTO UserTopicFavourite(UserId, TopicId, CreationDate)
-		VALUES(?, ?, ?)
+		INSERT INTO UserTopicFavourite(BrokerId, UserId, TopicId, CreationDate)
+		VALUES(?, ?, ?, ?)
 	`
 
 	stmt, err := con.Prepare(stmtStr)
@@ -1353,24 +1356,24 @@ func InsertFavouriteTopic(con *sql.DB, userId int, topicId int) error {
 	}
 	defer stmt.Close()
 
-	if _, err := stmt.Exec(userId); err != nil {
+	if _, err := stmt.Exec(brokerId, userId, topicId, time.Now()); err != nil {
 		return fmt.Errorf("Error while executing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
 
 	return nil
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-30     | Polariusz | Created |
+// | Date of change | By        | Comment           |
+// +----------------+-----------+-------------------+
+// | 2025-05-30     | Polariusz | Created           |
+// | 2025-06-07     | Polariusz | Changed arguments |
 //
 // # Arguments
 // - con *sql.DB : It's a connection to the database.
-// - userId int  : [User].[ID]
-// - topicId int : [Topic].[ID]
+// - id int      : [UserTopicFavourite].[ID]
 //
 // # Description
-// - The function shall delete rows matched with arguments `userId` and `topicId` from the table `UserTopicFavourite`.
+// - The function shall delete row matched with argument `id` from the table `UserTopicFavourite`.
 //
 // # Tables Affected
 // - UserTopicFavourite
@@ -1384,11 +1387,10 @@ func InsertFavouriteTopic(con *sql.DB, userId int, topicId int) error {
 //
 // # Author
 // - Polariusz
-func DeleteFavouriteTopic(con *sql.DB, userId int, topicId int) error {
+func DeleteFavouriteTopic(con *sql.DB, id int) error {
 	stmtStr := `
 		DELETE FROM UserTopicFavourite
-		WHERE userId = ?
-		AND topicId = ?
+		WHERE ID = ?
 	`
 
 	stmt, err := con.Prepare(stmtStr)
@@ -1397,7 +1399,7 @@ func DeleteFavouriteTopic(con *sql.DB, userId int, topicId int) error {
 	}
 	defer stmt.Close()
 
-	if _, err := stmt.Exec(userId); err != nil {
+	if _, err := stmt.Exec(id); err != nil {
 		return fmt.Errorf("Error while executing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
 

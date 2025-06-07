@@ -8,8 +8,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"fmt"
 	"github.com/eclipse/paho.mqtt.golang"
-	"slices"
-	"strings"
 	"time"
 	"strconv"
 )
@@ -191,9 +189,9 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Get("/topic/messages", GetTopicMessagesHandler(serverState))
 	server.Get("/ping", GetPingHandler(serverState))
 	server.Get("/topic/all-known", GetTopicAllKnownHandler(serverState))
-	server.Post("/topic/favourites/mark", PostTopicFavouritesMark(serverState))			// TODO: DB
+	server.Post("/topic/favourites/mark", PostTopicFavouritesMark(serverState))
 	server.Post("/topic/favourites/unmark", PostTopicFavouritesUnmark(serverState))		// TODO: DB
-	server.Get("/topic/favourites", GetTopicFavourites(serverState))					// TODO: DB
+	server.Get("/topic/favourites", GetTopicFavourites(serverState))
 }
 
 // | Date of change | By        | Comment               |
@@ -1122,9 +1120,10 @@ func GetTopicAllKnownHandler(serverState *ServerState) fiber.Handler {
 	}
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------|
-// | 2025-05-16     | Polariusz | Created |
+// | Date of change | By        | Comment                        |
+// +----------------+-----------+--------------------------------+
+// | 2025-05-16     | Polariusz | Created                        |
+// | 2025-06-07     | Polariusz | Changed the connection checker |
 //
 // # Method-Type
 // - Handler
@@ -1161,9 +1160,10 @@ func PostDisconnectFromBrokerHandler(serverState *ServerState) fiber.Handler {
 	}
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------|
-// | 2025-05-18     | Polariusz | Created |
+// | Date of change | By        | Comment            |
+// +----------------+-----------+--------------------+
+// | 2025-05-18     | Polariusz | Created            |
+// | 2025-06-07     | Polariusz | Integrated with DB |
 //
 // # Method-Type
 // - Handler
@@ -1174,8 +1174,7 @@ func PostDisconnectFromBrokerHandler(serverState *ServerState) fiber.Handler {
 //
 // # Usage
 // - Call declared by the routing method addRoutes() URL with the GET-Method.
-// - Data: JSON Structure:
-//   - {"Topics":["<TOPIC-1>","<TOPIC-2>","<TOPIC-N>"]}
+// - The client shall post a JSON that matches the structure of `TopicsWrapper`.
 //
 // # Returns
 // - 200 (OK): JSON
@@ -1184,6 +1183,7 @@ func PostDisconnectFromBrokerHandler(serverState *ServerState) fiber.Handler {
 //   - {"result":{<TOPIC-N>:{"Status":"<STATUS-N>","Message":"<MESSAGE-N>"}}}
 // - 400 (Bad Request): JSON
 //   - {"badJson": "<const BADJSON>"}
+//   - {"terribleJson": "Arguments are not valid"}
 // - 401 (Unauthorized): JSON
 //   - {"Message": "Authenticate yourself first!"}
 //
@@ -1205,16 +1205,61 @@ func PostTopicFavouritesMark(serverState *ServerState) fiber.Handler {
 			})
 		}
 
+		if markTopics.BrokerUserIDs.BrokerId < 0 || markTopics.BrokerUserIDs.UserId < 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"terribleJson": "Arguments are not valid",
+			})
+		}
+
+		favTopicList, err := database.SelectFavouriteTopicsByBrokerIdAndUserId(serverState.con, markTopics.BrokerUserIDs.BrokerId, markTopics.BrokerUserIDs.UserId)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"InternalServerError": err.Error(),
+			})
+		}
+
+		dbTopicList, err := database.SelectTopicsByBrokerId(serverState.con, markTopics.BrokerUserIDs.BrokerId)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"InternalServerError": err.Error(),
+			})
+		}
+
 		topicResult := make(map[string]TopicResult)
 		atLeastOneBadTopic := false
 
 		for _, markTopic := range markTopics.Topics {
-			if slices.Contains(serverState.favouriteTopics, markTopic) {
+			isSubscribed := false
+			for _, dbFavTopic := range favTopicList {
+				if markTopic == dbFavTopic.Topic {
+					atLeastOneBadTopic = false
+					isSubscribed = true
+					break;
+				}
+			}
+			if isSubscribed {
 				atLeastOneBadTopic = true
 				topicResult[markTopic] = TopicResult{"What", "The topic is marked as favourite"}
-			} else {
-				serverState.favouriteTopics = append(serverState.favouriteTopics, markTopic)
-				topicResult[markTopic] = TopicResult{"Fine", "Added topic to the favourite list"}
+				continue
+			}
+
+			isKnown := false
+			for _, dbTopic := range dbTopicList {
+				if markTopic == dbTopic.Topic {
+					isKnown = true
+					if err := database.InsertFavouriteTopic(serverState.con, markTopics.BrokerUserIDs.BrokerId, markTopics.BrokerUserIDs.UserId, dbTopic.Id); err != nil {
+						atLeastOneBadTopic = true
+						topicResult[markTopic] = TopicResult{"ServerError", err.Error()}
+					} else {
+						topicResult[markTopic] = TopicResult{"Fine", "Marked topic as favourite"}
+					}
+					break
+				}
+			}
+
+			if !isKnown {
+				atLeastOneBadTopic = true
+				topicResult[markTopic] = TopicResult{"ClientError", "The topic is not known"}
 			}
 		}
 
@@ -1243,8 +1288,7 @@ func PostTopicFavouritesMark(serverState *ServerState) fiber.Handler {
 //
 // # Usage
 // - Call declared by the routing method addRoutes() URL with the GET-Method.
-// - Data: JSON Structure:
-//   - {"Topics":["<TOPIC-1>","<TOPIC-2>","<TOPIC-N>"]}
+// - The client shall post a JSON that matches the structure of `TopicsWrapper`.
 //
 // # Returns
 // - 200 (OK): JSON
@@ -1253,8 +1297,11 @@ func PostTopicFavouritesMark(serverState *ServerState) fiber.Handler {
 //   - {"result":{<TOPIC-N>:{"Status":"<STATUS-N>","Message":"<MESSAGE-N>"}}}
 // - 400 (Bad Request): JSON
 //   - {"badJson": "<const BADJSON>"}
+//   - {"terribleJSON":"Arguments are not valid"}
 // - 401 (Unauthorized): JSON
 //   - {"Message": "Authenticate yourself first!"}
+// - 500 (Internal Server Error): JSON
+//   - {"InternalServerError":"<SQL-ERROR>"}
 //
 // # Author
 // - Polariusz
@@ -1274,22 +1321,39 @@ func PostTopicFavouritesUnmark(serverState *ServerState) fiber.Handler {
 			})
 		}
 
+		if unmarkTopics.BrokerUserIDs.BrokerId < 0 || unmarkTopics.BrokerUserIDs.UserId < 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"terribleJson": "Arguments are not valid",
+			})
+		}
+
+		favTopicList, err := database.SelectFavouriteTopicsByBrokerIdAndUserId(serverState.con, unmarkTopics.BrokerUserIDs.BrokerId, unmarkTopics.BrokerUserIDs.UserId)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"InternalServerError": err.Error(),
+			})
+		}
+
 		topicResult := make(map[string]TopicResult)
 		atLeastOneBadTopic := false
 
 		for _, unmarkTopic := range unmarkTopics.Topics {
 			topicFound := false
-			for markedTopicIndex, markedTopic := range serverState.favouriteTopics {
-				if strings.Compare(unmarkTopic, markedTopic) == 0 {
+			for _, dbFavTopic := range favTopicList {
+				if unmarkTopic == dbFavTopic.Topic {
 					topicFound = true
-					topicResult[unmarkTopic] = TopicResult{"Fine", "Unmarked topic from favourite list"}
-					serverState.favouriteTopics = append(serverState.favouriteTopics[:markedTopicIndex], serverState.favouriteTopics[markedTopicIndex+1:]...)
-					break;
+					if err := database.DeleteFavouriteTopic(serverState.con, dbFavTopic.Id); err != nil {
+						atLeastOneBadTopic = true
+						topicResult[unmarkTopic] = TopicResult{"ServerError", err.Error()}
+					} else {
+						topicResult[unmarkTopic] = TopicResult{"Fine", "Unmarked topic from favourite list"}
+					}
+					break
 				}
-			}
-			if !topicFound {
-				atLeastOneBadTopic = true
-				topicResult[unmarkTopic] = TopicResult{"What", "The topics isn't on the favourite list"}
+				if !topicFound {
+					atLeastOneBadTopic = true
+					topicResult[unmarkTopic] = TopicResult{"What", "The topics isn't on the favourite list"}
+				}
 			}
 		}
 
@@ -1305,9 +1369,10 @@ func PostTopicFavouritesUnmark(serverState *ServerState) fiber.Handler {
 	}
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------|
-// | 2025-05-18     | Polariusz | Created |
+// | Date of change | By        | Comment            |
+// +----------------+-----------+--------------------+
+// | 2025-05-18     | Polariusz | Created            |
+// | 2025-06-07     | Polariusz | Integrated with DB |
 //
 // # Method-Type
 // - Handler
@@ -1321,7 +1386,7 @@ func PostTopicFavouritesUnmark(serverState *ServerState) fiber.Handler {
 //
 // # Returns
 // - 200 (OK): JSON
-//   - {"Topics":["<TOPIC-1>","<TOPIC-2>","<TOPIC-3>"]}
+//   - {"Topics":[<SelectFavTopic-N>]}
 // - 400 (Bad Request): JSON
 //   - {"badJson":`BADJSON`}
 //   - {"terribleJSON":"Arguments are not valid"}

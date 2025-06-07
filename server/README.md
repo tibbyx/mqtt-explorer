@@ -465,7 +465,7 @@ _Note that the function will wipe the credentials from the state, meaning that t
 
 ### To Mark a topic as favourite:
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"Topics":["<TOPIC-N>"]}' localhost:3000/topic/favourites/mark
+curl -X POST -H "Content-Type: application/json" -d '{"BrokerUserIds":{"BrokerId":<BROKER-ID>, "UserId":<USER-ID>},"Topics":["<TOPIC-N>"]}' localhost:3000/topic/favourites/mark
 ```
 
 #### If the server cannot process the json, it will return a 400 (Bad request) with a JSON:
@@ -508,7 +508,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"Topics":["<TOPIC-N>"]}' l
 
 ### To Unmark a topic as favourite:
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"Topics":["<TOPIC-N>"]}' localhost:3000/topic/favourites/unmark
+curl -X POST -H "Content-Type: application/json" -d '{"BrokerUserIds":{"BrokerId":<BROKER-ID>, "UserId":<USER-ID>},"Topics":["<TOPIC-N>"]}' localhost:3000/topic/favourites/unmark
 ```
 
 #### If the server cannot process the json, it will return a 400 (Bad request) with a JSON:
@@ -551,20 +551,48 @@ curl -X POST -H "Content-Type: application/json" -d '{"Topics":["<TOPIC-N>"]}' l
 
 ### To get marked as favourite topics:
 ```bash
-curl localhost:3000/topic/favourites
+curl -X GET -H "Content-Type: application/json" -d '{"BrokerId":<BROKER-ID>, "UserId":<USER-ID>}' localhost:3000/topic/favourites
+```
+
+#### If the JSON structure is invalid, the server will return a 400 (Bad Request) with a JSON:
+```javascript
+{
+  "badJson" : <BADJSON>
+}
+```
+
+#### If the JSON structure is valid, but the arguments aren't, the server will return a 400 (Bad Request) with a JSON:
+```javascript
+{
+  "terribleJSON":"Arguments are not valid"
+}
 ```
 
 #### If the client is not authenticated, the server will return a 401 (Unauthorized) with a JSON:
 ```javascript
 {
-  "Message": "Authenticate yourself first!",
+  "Message" : "Authenticate yourself first!"
+}
+```
+
+#### If the server encounters an SQL-Statement error, it will return a 500 (Internal Server Error) with a JSON:
+```javascript
+{
+  "InternalServerError" : "<SQL-ERROR>"
 }
 ```
 
 #### If everything went well, the server will return a 200 (OK) with list of favourite topics in a JSON format:
+```javascript
 {
-  "Topics":["<TOPIC-1>", "<TOPIC-2>", "<TOPIC-N>"]
+  "Topics" :
+  [
+    <SelectFavTopic-1>,
+    <SelectFavTopic-2>,
+    <SelectFavTopic-N>
+  ]
 }
+```
 
 ### Quick start:
 ```bash
