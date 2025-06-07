@@ -1132,9 +1132,10 @@ func SelectMessagesByTopicIdAndBrokerId(con *sql.DB, topicId int, brokerId int) 
 		INNER JOIN User u
 		ON u.ID = m.UserId
 		WHERE
-		  TopicId = ?
+			m.TopicId = ?
 		AND
-		  BrokerId = ?
+			m.BrokerId = ?
+		ORDER BY m.CreationDate DESC
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
@@ -1187,25 +1188,6 @@ func SelectMessagesByTopicIdAndBrokerId(con *sql.DB, topicId int, brokerId int) 
 // - Polariusz
 func SelectMessagesByTopicIdBrokerIdAndIndex(con *sql.DB, topicId int, brokerId int, index int) ([]SelectMessage, error) {
 	var selectMessageList []SelectMessage
-	/*
-	stmtStr := `
-		SELECT ID, UserId, Username, TopicId, BrokerId, QoS, Message, CreationDate
-		FROM (
-			SELECT (ROW_NUMBER() OVER(ORDER BY ID)) as RowCnt, m.ID, u.ID, u.Username m.TopicId, m.BrokerId, m.QoS, m.Message, m.CreationDate
-			FROM Message m
-			INNER JOIN User u
-				ON u.ID = m.UserId
-			WHERE
-				TopicId = ?
-			AND
-				BrokerId = ?
-		) MsgWithCnt
-		WHERE
-			RowCnt > ? * ?
-		AND
-			RowCnt <= (1+?) * ?
-	`
-	*/
 	stmtStr := `
 		SELECT ID, UserId, ClientId, TopicId, BrokerId, QoS, Message, CreationDate
 		FROM (
@@ -1217,6 +1199,7 @@ func SelectMessagesByTopicIdBrokerIdAndIndex(con *sql.DB, topicId int, brokerId 
 				m.TopicId = ?
 			AND
 				m.BrokerId = ?
+			ORDER BY m.CreationDate DESC
 		) MsgWithCnt
 		WHERE
 			RowCnt > ? * ?
