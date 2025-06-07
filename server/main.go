@@ -98,10 +98,6 @@ func messageBuilder(clientId string, message string) []byte {
 type ServerState struct {
 	userCreds MqttCredentials
 	mqttClient mqtt.Client
-	subscribedTopics []string // TODO: This probably has to be a struct array of a pair, a pair of topic and epoch time.
-	allKnownTopics []string // TODO: This probably has to be a struct array of a pair, a pair of topic and epoch time.
-	receivedMessages map[string][]string // TODO: This should be in a database that we don't have yet.
-	favouriteTopics []string // TODO: This should be in a database that we don't have yet.
 	con *sql.DB
 }
 
@@ -156,7 +152,6 @@ func main() {
 
 	server := fiber.New()
 	var serverState ServerState
-	serverState.receivedMessages = make(map[string][]string)
 	serverState.con = con
 
 	addRoutes(server, &serverState)
