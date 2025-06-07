@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 	_ "github.com/mattn/go-sqlite3"
+	"strconv"
 )
 
 const databaseName string = "mqtt-client-database.db"
@@ -29,9 +30,10 @@ func OpenDatabase() (*sql.DB, error) {
 	return con, nil
 }
 
-// | Date of change | By     | Comment |
-// +----------------+--------+---------+
-// | 2025-05-21     | Q-uock | Created |
+// | Date of change | By        | Comment                   |
+// +----------------+-----------+---------------------------+
+// | 2025-05-21     | Q-uock    | Created                   |
+// | 2025-06-06     | Polariusz | Added UserTopicSubscribed |
 //
 // # Description
 // - Creates tables in the connected to database connection.
@@ -73,20 +75,30 @@ func SetupDatabase(con *sql.DB) error {
 
 		`CREATE TABLE IF NOT EXISTS Topic (
 			ID INTEGER PRIMARY KEY AUTOINCREMENT,
-			UserId INTEGER NOT NULL,
 			BrokerId INTEGER NOT NULL,
-			Subscribed BOOLEAN,
 			Topic TEXT NOT NULL,
 			CreationDate DATETIME,
-			FOREIGN KEY(UserId) REFERENCES User(ID),
 			FOREIGN KEY(BrokerId) REFERENCES Broker(ID)
+		);`,
+
+		`CREATE TABLE IF NOT EXISTS UserTopicSubscribed (
+			ID INTEGER PRIMARY KEY AUTOINCREMENT,
+			BrokerId INTEGER NOT NULL,
+			UserId INTEGER NOT NULL,
+			TopicId INTEGER NOT NULL,
+			CreationDate DATETIME,
+			FOREIGN KEY(BrokerId) REFERENCES Broker(ID),
+			FOREIGN KEY(UserId) REFERENCES User(ID),
+			FOREIGN KEY(TopicId) REFERENCES Topic(ID)
 		);`,
 
 		`CREATE TABLE IF NOT EXISTS UserTopicFavourite (
 			ID INTEGER PRIMARY KEY AUTOINCREMENT,
+			BrokerId INTEGER NOT NULL,
 			UserId INTEGER NOT NULL,
 			TopicId INTEGER NOT NULL,
 			CreationDate DATETIME,
+			FOREIGN KEY(BrokerId) REFERENCES Broker(ID),
 			FOREIGN KEY(UserId) REFERENCES User(ID),
 			FOREIGN KEY(TopicId) REFERENCES Topic(ID)
 		);`,
@@ -94,7 +106,7 @@ func SetupDatabase(con *sql.DB) error {
 
 	for _, table := range tables {
 		if _, err := con.Exec(table); err != nil {
-			return fmt.Errorf("Skill issues\nErr: %s\n", err)
+			return fmt.Errorf("TABLE:\n%s\nSkill issues\nErr: %s\n", table, err)
 		}
 	}
 
@@ -128,9 +140,11 @@ type InsertBroker struct {
 	Port int
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-21     | Polariusz | Created |
+// | Date of change | By        | Comment                          |
+// +----------------+-----------+----------------------------------+
+// | 2025-05-21     | Polariusz | Created                          |
+// | 2025-06-04     | Polariusz | Added the ID return              |
+// | 2025-06-05     | Polariusz | fix: added stmt and rows closing |
 //
 // # Arguments
 // - con *sql.DB        : It's a connection to the database that is used here to insert stuff in.
@@ -139,29 +153,50 @@ type InsertBroker struct {
 // # Description
 // - The function shall insert the argument `broker` with the current date into table Broker from connected to database argument `con`.
 // - The insertion shall only happen if the `broker` is not in the database.
+// - The function shall return the ID of the inserted broker.
 //
 // # Tables Affected
 // - Broker
 //   - INSERT
-//   - SELECT (Subquery)
+//   - SELECT
 //
 // # Returns
+// - int: it's the ID from table Broker that match the arguments `broker`. It will be -1 if an error has accured.
 // - error if something bad happened. It can happen if the database that is connected does not have table Broker. In this case, please use functions `OpenDatabase()` and `SetupDatabase()` to set-up the database.
 //
 // # Author
 // - Polariusz
-func InsertNewBroker(con *sql.DB, broker InsertBroker) error {
+func InsertNewBroker(con *sql.DB, broker InsertBroker) (int, error) {
 	// I insert the arg broker while checking if it isn't in the database. If it is, the insertion will not happen.
 	stmt, err := con.Prepare("INSERT INTO Broker(Ip, Port, CreationDate) SELECT ?, ?, ? WHERE NOT EXISTS(SELECT 1 FROM Broker WHERE Ip = ? AND Port = ?)");
 	if err != nil {
-		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	if _, err := stmt.Exec(broker.Ip, broker.Port, time.Now(), broker.Ip, broker.Port); err != nil {
-		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
-	return nil
+	// I want to get the ID of it.
+	stmt, err = con.Prepare("SELECT ID from Broker WHERE Ip = ? AND Port = ?");
+	if err != nil {
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(broker.Ip, broker.Port)
+	if err != nil {
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+	defer rows.Close()
+
+	rows.Next()
+	var ID int
+	rows.Scan(&ID);
+
+
+	return ID, nil
 }
 
 // | Date of change | By        | Comment |
@@ -217,6 +252,7 @@ func SelectBrokerList(con *sql.DB) ([]SelectBroker, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var Id int
@@ -262,11 +298,13 @@ func SelectBrokerByIpAndPort(con *sql.DB, ip string, port int) (SelectBroker, er
 	if err != nil {
 		return fullBroker, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(ip, port)
 	if err != nil {
 		return fullBroker, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer rows.Close()
 
 	rows.Next()
 	var Id int
@@ -287,6 +325,7 @@ func SelectBrokerByIpAndPort(con *sql.DB, ip string, port int) (SelectBroker, er
 /*                                       +------+                                       */
 /* --------------------------------------| USER |-------------------------------------- */
 /*                                       +------+                                       */
+
 
 // | Date of change | By        | Comment |
 // +----------------+-----------+---------+
@@ -317,9 +356,12 @@ type InsertUser struct {
 	Outsider bool
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-22     | Polariusz | Created |
+// | Date of change | By        | Comment                                                   |
+// +----------------+-----------+-----------------------------------------------------------+
+// | 2025-05-22     | Polariusz | Created                                                   |
+// | 2025-06-04     | Polariusz | Added the ID return                                       |
+// | 2025-06-05     | Polariusz | Fixed the selection error and added stmt and rows closing |
+// | 2025-06-06     | Polariusz | Changed the insertion to only happen if it is unique      |
 //
 // # Arguments
 // - con *sql.DB     : It's a connection to the database that is used here to insert stuff in.
@@ -327,30 +369,76 @@ type InsertUser struct {
 //
 // # Description
 // - The function shall insert the argument `user` with the current date into table User from connected to database argument `con`.
+// - The function shall return the ID of the table User that match the inserted argument `user`.
 //
 // # Tables Affected
 // - User
 //   - INSERT
+//   - SELECT
 //
 // # Returns
+// - int: it's the ID from table User that match the arguments `user`. It will be -1 if an error has accured.
 // - Can return error if the con isn't connected or if it doesn't have table User. In this case, please use functions `OpenDatabase()` and `SetupDatabase()` to set-up the database.
 //
 // # Author
 // - Polariusz
-func InsertNewUser(con *sql.DB, user InsertUser) error {
+func InsertNewUser(con *sql.DB, user InsertUser) (int, error) {
 	stmt, err := con.Prepare(`
-		INSERT INTO User(BrokerId, ClientId, Username, Password, Outsider, CreationDate) VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO User(BrokerId, ClientId, Username, Password, Outsider, CreationDate)
+		SELECT ?, ?, ?, ?, ?, ?
+		WHERE NOT EXISTS(
+			SELECT 1
+			FROM User
+			WHERE
+			  BrokerId = ?
+			AND
+			  ClientID = ?
+			AND
+			  Username = ?
+			AND
+			  Password = ?
+			AND
+			  Outsider = ?
+			LIMIT 1
+		)
 	`);
 
 	if err != nil {
-		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+	defer stmt.Close()
+
+	if _, err := stmt.Exec(user.BrokerId, user.ClientId, user.Username, user.Password, user.Outsider, time.Now(), user.BrokerId, user.ClientId, user.Username, user.Password, user.Outsider); err != nil {
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
-	if _, err := stmt.Exec(user.BrokerId, user.ClientId, user.Username, user.Password, user.Outsider, time.Now()); err != nil {
-		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+	stmt, err = con.Prepare(`
+		SELECT ID
+		FROM User
+		WHERE
+		  BrokerId = ?
+		AND
+		  ClientID = ?
+		AND
+		  Username = ?
+		AND
+		  Password = ?
+		AND
+		  Outsider = ?
+	`)
+	if err != nil {
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+	defer stmt.Close()
+
+	var userId int
+	err = stmt.QueryRow(strconv.Itoa(user.BrokerId), user.ClientId, user.Username, user.Password, user.Outsider).Scan(&userId)
+	if err != nil {
+		fmt.Printf("select stmt exec error %s\n", err)
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
-	return nil
+	return userId, nil
 }
 
 // | Date of change | By        | Comment |
@@ -413,18 +501,20 @@ func SelectUserById(con *sql.DB, id int) (SelectUser, error) {
 	var user SelectUser
 
 	stmt, err := con.Prepare(`
-		SELECT ID, BrokerId, ClientId, UserrName, Outsider, CreationDate
+		SELECT ID, BrokerId, ClientId, Username, Outsider, CreationDate
 		FROM User
 		WHERE ID = ?
 	`)
 	if err != nil {
 		return user, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(id)
 	if err != nil {
 		return user, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer rows.Close()
 
 	if !rows.Next() {
 		return user, fmt.Errorf("Table User matched to Id: %d yelded no results.\n", id)
@@ -466,18 +556,20 @@ func SelectUsersByClientId(con *sql.DB, clientId string) ([]SelectUser, error) {
 	var userList []SelectUser
 
 	stmt, err := con.Prepare(`
-		SELECT ID, BrokerId, ClientId, UserrName, Outsider, CreationDate
+		SELECT ID, BrokerId, ClientId, Username, Outsider, CreationDate
 		FROM User
 		WHERE ClientId = ?
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(clientId)
 	if err != nil {
 		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer rows.Close()
 
 	tableIsEmpty := true
 	for rows.Next() {
@@ -494,6 +586,27 @@ func SelectUsersByClientId(con *sql.DB, clientId string) ([]SelectUser, error) {
 	return userList, nil
 }
 
+func SelectUserByClientIdAndBrokerId(con *sql.DB, clientId string, brokerId int) (SelectUser, error) {
+	var user SelectUser
+
+	stmt, err := con.Prepare(`
+		SELECT ID, BrokerId, ClientId, Username, Outsider, CreationDate
+		FROM User
+		WHERE ClientId = ?
+		AND BrokerId = ?
+	`)
+	if err != nil {
+		return user, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+	defer stmt.Close()
+
+	if err := stmt.QueryRow(clientId, brokerId).Scan(&user.Id, &user.BrokerId, &user.ClientId, &user.Username, &user.Outsider, &user.CreationDate); err != nil {
+		return user, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+
+	return user, nil
+}
+
 /*                                       +-------+                                       */
 /* --------------------------------------| TOPIC |-------------------------------------- */
 /*                                       +-------+                                       */
@@ -507,39 +620,32 @@ func SelectUsersByClientId(con *sql.DB, clientId string) ([]SelectUser, error) {
 // | Struct SelectTopic     | Table Topic           |
 // +------------------------+-----------------------+
 // | Id int                 | ID INTEGER            |
-// | UserId int             | UserId INTEGER        |
 // | BrokerId int           | BrokerId INTEGER      |
-// | Subscribed bool        | Subscribed BOOLEAN    |
 // | Topic string           | Topic TEXT            |
 // | CreationDate time.Time | CreationDate DATETIME |
 //
 // # Used in
-// - SelectSubscribedTopics()
-// - SelectUnsubscribedTopics()
-// - SelectTopicsByBrokerIdAndUserId()
+// - SelectTopicsByBrokerId()
 //
 // # Author
 // - Polariusz
 type SelectTopic struct {
 	Id int
-	UserId int
 	BrokerId int
-	Subscribed bool
 	Topic string
 	CreationDate time.Time
 }
 
 // | Date of change | By        | Comment |
 // +----------------+-----------+---------+
-// | 2025-05-29     | Polariusz | Created |
+// | 2025-06-06     | Polariusz | Created |
 //
 // # Arguments
 // - con *sql.DB : It's a connection to the database that is used here to insert stuff in.
 // - brokerId    : Unique Identifier of table `Broker.ID`
-// - userId      : Unique Identifier of table `User.ID`
 //
 // # Description
-// - The function shall return an array of subscribed Topics matched with arguments `brokerId` and `userId`.
+// - The function shall return an array of all known Topics matched with arguments `brokerId`
 //
 // # Tables Affected
 // - Topic
@@ -553,7 +659,7 @@ type SelectTopic struct {
 //
 // # Author
 // - Polariusz
-func SelectSubscribedTopics(con *sql.DB, brokerId int, userId int) ([]SelectTopic, error) {
+func SelectTopicsByBrokerId(con *sql.DB, brokerId int) ([]SelectTopic, error) {
 	var topicList []SelectTopic
 
 	stmt, err := con.Prepare(`
@@ -561,149 +667,38 @@ func SelectSubscribedTopics(con *sql.DB, brokerId int, userId int) ([]SelectTopi
 		FROM Topic
 		WHERE
 			BrokerId = ?
-		AND
-			UserID = ?
-		AND
-			Subscribed = true
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("Error while preparing the statement.\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
-	rows, err := stmt.Query(brokerId, userId)
+	rows, err := stmt.Query(brokerId)
 	if err != nil {
 		return nil, fmt.Errorf("Error while quering the statement.\nErr: %s\n", err)
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var topic SelectTopic
-		rows.Scan(&topic.Id, &topic.UserId, &topic.BrokerId, &topic.Subscribed, &topic.Topic, &topic.CreationDate)
+		rows.Scan(&topic.Id, &topic.BrokerId, &topic.Topic, &topic.CreationDate)
 		topicList = append(topicList, topic)
 	}
 
 	return topicList, nil
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-29     | Polariusz | Created |
-//
-// # Arguments
-// - con *sql.DB : It's a connection to the database that is used here to insert stuff in.
-// - brokerId    : Unique Identifier of table `Broker.ID`
-// - userId      : Unique Identifier of table `User.ID`
-//
-// # Description
-// - The function shall return an array of unsubscribed Topics matched with arguments `brokerId` and `userId`.
-//
-// # Tables Affected
-// - Topic
-//   - SELECT
-//
-// # Returns
-// - error when:
-//   - Skill Issues
-//   - Table Topic does not exists
-//     - Use the `SetupDatabase()` function to set the database up before calling this function.
-//
-// # Author
-// - Polariusz
-func SelectUnsubscribedTopics(con *sql.DB, brokerId int, userId int) ([]SelectTopic, error) {
-	var topicList []SelectTopic
-
-	stmt, err := con.Prepare(`
-		SELECT *
-		FROM Topic
-		WHERE
-			BrokerId = ?
-		AND
-			UserID = ?
-		AND
-			Subscribed = false
-	`)
-	if err != nil {
-		return nil, fmt.Errorf("Error while preparing the statement.\nErr: %s\n", err)
-	}
-
-	rows, err := stmt.Query(brokerId, userId)
-	if err != nil {
-		return nil, fmt.Errorf("Error while quering the statement.\nErr: %s\n", err)
-	}
-
-	for rows.Next() {
-		var topic SelectTopic
-		rows.Scan(&topic.Id, &topic.UserId, &topic.BrokerId, &topic.Subscribed, &topic.Topic, &topic.CreationDate)
-		topicList = append(topicList, topic)
-	}
-
-	return topicList, nil
-}
-
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-29     | Polariusz | Created |
-//
-// # Arguments
-// - con *sql.DB : It's a connection to the database that is used here to insert stuff in.
-// - brokerId    : Unique Identifier of table `Broker.ID`
-// - userId      : Unique Identifier of table `User.ID`
-//
-// # Description
-// - The function shall return an array of all known Topics matched with arguments `brokerId` and `userId`.
-//
-// # Tables Affected
-// - Topic
-//   - SELECT
-//
-// # Returns
-// - error when:
-//   - Skill Issues
-//   - Table Topic does not exists
-//     - Use the `SetupDatabase()` function to set the database up before calling this function.
-//
-// # Author
-// - Polariusz
-func SelectTopicsByBrokerIdAndUserId(con *sql.DB, brokerId int, userId int) ([]SelectTopic, error) {
-	var topicList []SelectTopic
-
-	stmt, err := con.Prepare(`
-		SELECT *
-		FROM Topic
-		WHERE
-			BrokerId = ?
-		AND
-			UserID = ?
-	`)
-	if err != nil {
-		return nil, fmt.Errorf("Error while preparing the statement.\nErr: %s\n", err)
-	}
-
-	rows, err := stmt.Query(brokerId, userId)
-	if err != nil {
-		return nil, fmt.Errorf("Error while quering the statement.\nErr: %s\n", err)
-	}
-
-	for rows.Next() {
-		var topic SelectTopic
-		rows.Scan(&topic.Id, &topic.UserId, &topic.BrokerId, &topic.Subscribed, &topic.Topic, &topic.CreationDate)
-		topicList = append(topicList, topic)
-	}
-
-	return topicList, nil
-}
-
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-29     | Polariusz | Created |
+// | Date of change | By        | Comment        |
+// +----------------+-----------+----------------+
+// | 2025-05-29     | Polariusz | Created        |
+// | 2025-06-06     | Polariusz | Removed UserId |
 //
 // # Struct to Table Mapping
 //
 // | Struct InsertTopic     | Table Topic           |
 // +------------------------+-----------------------+
 // |                        | ID INTEGER            |
-// | UserId int             | UserId INTEGER        |
 // | BrokerId int           | BrokerId INTEGER      |
-// | Subscribed bool        | Subscribed BOOLEAN    |
 // | Topic string           | Topic TEXT            |
 // |                        | CreationDate DATETIME |
 //
@@ -713,9 +708,7 @@ func SelectTopicsByBrokerIdAndUserId(con *sql.DB, brokerId int, userId int) ([]S
 // # Author
 // - Polariusz
 type InsertTopic struct {
-	UserId int
 	BrokerId int
-	Subscribed bool
 	Topic string
 }
 
@@ -745,34 +738,130 @@ type InsertTopic struct {
 //
 // # Author
 // - Polariusz
-func InsertNewTopic(con *sql.DB, topic InsertTopic) error {
+func InsertNewTopic(con *sql.DB, topic InsertTopic) (int, error) {
 	stmt, err := con.Prepare(`
-		INSERT INTO Topic(UserId, BrokerId, Subscribed, Topic, CreationDate)
-		Select ?, ?, ?, ?, ? WHERE NOT EXISTS(
+		INSERT INTO Topic(BrokerId, Topic, CreationDate)
+		Select ?, ?, ? WHERE NOT EXISTS(
 			SELECT 1
 			FROM Topic
 			WHERE
-				UserId = ?
-			AND
 				BrokerID = ?
 			AND
 				Topic = ?
 		)
 	`)
 	if err != nil {
-		return fmt.Errorf("Skill issues\nErr: %s\n", err)
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+	defer stmt.Close()
+
+	if _, err := stmt.Exec(topic.BrokerId, topic.Topic, time.Now(), topic.BrokerId, topic.Topic); err != nil {
+		return -1, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
-	if _, err := stmt.Exec(topic.UserId, topic.BrokerId, topic.Subscribed, topic.Topic, time.Now()); err != nil {
-		return fmt.Errorf("Skill issues\nErr: %s\n", err)
-	}
+	var topicId int
 
-	return nil
+	con.QueryRow("SELECT ID FROM Topic WHERE BrokerId = ? AND Topic = ?", topic.BrokerId, topic.Topic).Scan(&topicId)
+
+	return topicId, nil
 }
+
+/*                                       +---------------------+                                       */
+/* --------------------------------------| USERTOPICSUBSCRIBED |-------------------------------------- */
+/*                                       +---------------------+                                       */
 
 // | Date of change | By        | Comment |
 // +----------------+-----------+---------+
-// | 2025-05-29     | Polariusz | Created |
+// | 2025-06-06     | Polariusz | Created |
+//
+// # Struct to Table Mapping
+//
+// | Struct SelectUserTopicSubscribed | Table UserTopicSubscribed | Table Topic |
+// +----------------------------------+---------------------------+-------------+
+// | Id int                           | ID INTEGER                |             |
+// | BrokerId int                     | BrokerId INTEGER          |             |
+// | UserId int                       | UserId INTEGER            |             |
+// | TopicId int                      | TopicId INTEGER           | ID INTEGER  |
+// | Topic string                     |                           | Topic TEXT  |
+// | CreationDate time.Time           | CreationDate DATETIME     |             |
+//
+// # Used in
+// - SelectSubscribedTopics()
+//
+// # Author
+// - Polariusz
+type SelectUserTopicSubscribed struct {
+	Id int
+	BrokerId int
+	UserId int
+	TopicId int
+	Topic string
+	CreationDate time.Time
+}
+
+// | Date of change | By        | Comment                                              |
+// +----------------+-----------+------------------------------------------------------+
+// | 2025-05-29     | Polariusz | Created                                              |
+// | 2025-06-05     | Polariusz | added defer Close() for stmt and rows                |
+// | 2025-06-06     | Polariusz | Subscriptions are now handled in UserTopicSubscribed |
+//
+// # Arguments
+// - con *sql.DB : It's a connection to the database that is used here to insert stuff in.
+// - brokerId    : Unique Identifier of table `Broker.ID`
+// - userId      : Unique Identifier of table `User.ID`
+//
+// # Description
+// - The function shall return an array of subscribed Topics matched with arguments `brokerId` and `userId`.
+//
+// # Tables Affected
+// - Topic
+//   - SELECT
+//
+// # Returns
+// - error when:
+//   - Skill Issues
+//   - Table Topic does not exists
+//     - Use the `SetupDatabase()` function to set the database up before calling this function.
+//
+// # Author
+// - Polariusz
+func SelectSubscribedTopics(con *sql.DB, brokerId int, userId int) ([]SelectUserTopicSubscribed, error) {
+	var topicList []SelectUserTopicSubscribed
+
+	stmt, err := con.Prepare(`
+		SELECT uts.Id, uts.BrokerId, uts.UserId, uts.TopicId, t.Topic, uts.CreationDate
+		FROM UserTopicSubscribed uts
+		INNER JOIN Topic t
+			ON t.ID = uts.TopicId
+		WHERE
+			uts.BrokerId = ?
+		AND
+			uts.UserID = ?
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("Error while preparing the statement.\nErr: %s\n", err)
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(brokerId, userId)
+	if err != nil {
+		return nil, fmt.Errorf("Error while quering the statement.\nErr: %s\n", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var topic SelectUserTopicSubscribed
+		rows.Scan(&topic.Id, &topic.BrokerId, &topic.UserId, &topic.TopicId, &topic.Topic, &topic.CreationDate)
+		topicList = append(topicList, topic)
+	}
+
+	return topicList, nil
+}
+
+// | Date of change | By        | Comment                                              |
+// +----------------+-----------+------------------------------------------------------+
+// | 2025-05-29     | Polariusz | Created                                              |
+// | 2025-06-06     | Polariusz | Subscription is now handled with UserTopicSubscribed |
 //
 // # Arguments
 // - con *sql.DB : It's a connection to the database that is used here to insert stuff in.
@@ -782,8 +871,8 @@ func InsertNewTopic(con *sql.DB, topic InsertTopic) error {
 // - The function shall update a row matched to argument `topicId` to mark the column `Subscribed` as true.
 //
 // # Tables Affected
-// - Topic
-//   - UPDATE
+// - UserTopicSubscribed
+//   - INSERT
 //
 // # Returns
 // - error when:
@@ -793,37 +882,40 @@ func InsertNewTopic(con *sql.DB, topic InsertTopic) error {
 //
 // # Author
 // - Polariusz
-func SubscribeTopic(con *sql.DB, topicId int) error {
+func SubscribeTopic(con *sql.DB, brokerId int, userId int, topicId int) error {
 	stmt, err := con.Prepare(`
-		UPDATE Topic
-		SET Subscribed = true
-		WHERE ID = ?
+		INSERT INTO UserTopicSubscribed(BrokerId, UserId, TopicId, CreationDate)
+		VALUES(?, ?, ?, ?)
 	`)
 	if err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
-	if _, err := stmt.Exec(topicId); err != nil {
+	if _, err := stmt.Exec(brokerId, userId, topicId, time.Now()); err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
 	return nil
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-29     | Polariusz | Created |
+// | Date of change | By        | Comment                                                      |
+// +----------------+-----------+--------------------------------------------------------------+
+// | 2025-05-29     | Polariusz | Created                                                      |
+// | 2025-06-06     | Polariusz | Subscriptions are now handled in a UserTopicSubscribed table |
 //
 // # Arguments
-// - con *sql.DB : It's a connection to the database that is used here to insert stuff in.
+// - con *sql.DB : Connection to the database
+// - brokerId    : Unique Identifier of the Broker row
+// - userId      : Unique Identifier of the User row
 // - topicId     : Unique Identifier of the Topic row
 //
 // # Description
-// - The function shall update a row matched to argument `topicId` to mark the column `Subscribed` as false.
+// - The function shall delete a row matched to argument `brokerId`, `userId`, and `topicId` from table UserTopicSubscribed.
 //
 // # Tables Affected
-// - Topic
-//   - UPDATE
+// - UserTopicSubscribed
+//   - DELETE
 //
 // # Returns
 // - error when:
@@ -833,17 +925,22 @@ func SubscribeTopic(con *sql.DB, topicId int) error {
 //
 // # Author
 // - Polariusz
-func UnsubscribeTopic(con *sql.DB, topicId int) error {
+func UnsubscribeTopic(con *sql.DB, brokerId int, userId int, topicId int) error {
 	stmt, err := con.Prepare(`
-		UPDATE Topic
-		SET Subscribed = false
-		WHERE ID = ?
+		DELETE FROM UserTopicSubscribed
+		WHERE
+			BrokerId = ?
+		AND
+			UserId = ?
+		AND
+			TopicId = ?
 	`)
 	if err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
-	if _, err := stmt.Exec(topicId); err != nil {
+	if _, err := stmt.Exec(brokerId, userId, topicId); err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
 
@@ -881,6 +978,7 @@ func DeleteTopic(con *sql.DB, topicId int) error {
 	if err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	if _, err := stmt.Exec(topicId); err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
@@ -905,7 +1003,7 @@ func DeleteTopic(con *sql.DB, topicId int) error {
 // | UserId int             | UserId INTEGER        |
 // | TopicId int            | TopicId INTEGER       |
 // | BrokerId int           | BrokerId INTEGER      |
-// | QoS int                | QoS TINYINT           |
+// | QoS byte               | QoS TINYINT           |
 // | Message string         | Message TEXT          |
 // |                        | CreationDate DateTime |
 //
@@ -918,7 +1016,7 @@ type InsertMessage struct {
 	UserId int
 	TopicId int
 	BrokerId int
-	QoS int
+	QoS byte
 	Message string
 }
 
@@ -954,6 +1052,7 @@ func InsertNewMessage(con *sql.DB, message InsertMessage) error {
 	if err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	if _, err := stmt.Exec(message.UserId, message.TopicId, message.BrokerId, message.QoS, message.Message, time.Now()); err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)
@@ -962,21 +1061,23 @@ func InsertNewMessage(con *sql.DB, message InsertMessage) error {
 	return nil
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-29     | Polariusz | Created |
+// | Date of change | By        | Comment        |
+// +----------------+-----------+----------------+
+// | 2025-05-29     | Polariusz | Created        |
+// | 2025-06-06     | Polariusz | Added ClientId |
 //
 // # Struct to Table Message
 //
-// | Struct SelectMessage   | Table Message         |
-// +------------------------+-----------------------+
-// | Id int                 | ID INTEGER            |
-// | UserId int             | UserId INTEGER        |
-// | TopicId int            | TopicId INTEGER       |
-// | BrokerId int           | BrokerId INTEGER      |
-// | QoS int                | QoS TINYINT           |
-// | Message string         | Message TEXT          |
-// | CreationDate time.Time | CreationDate DateTime |
+// | Struct SelectMessage   | Table Message         | Table User    |
+// +------------------------+-----------------------+---------------+
+// | Id int                 | ID INTEGER            |               |
+// | UserId int             | UserId INTEGER        | ID INTEGER    |
+// | ClientId string        |                       | ClientId TEXT |
+// | TopicId int            | TopicId INTEGER       |               |
+// | BrokerId int           | BrokerId INTEGER      |               |
+// | QoS int                | QoS TINYINT           |               |
+// | Message string         | Message TEXT          |               |
+// | CreationDate time.Time | CreationDate DateTime |               |
 //
 // # Used in
 // - SelectMessagesByTopicIdAndBrokerId()
@@ -987,6 +1088,7 @@ func InsertNewMessage(con *sql.DB, message InsertMessage) error {
 type SelectMessage struct {
 	Id int
 	UserId int
+	ClientId string
 	TopicId int
 	BrokerId int
 	QoS int
@@ -1025,25 +1127,30 @@ func SelectMessagesByTopicIdAndBrokerId(con *sql.DB, topicId int, brokerId int) 
 	var selectMessageList []SelectMessage
 
 	stmt, err := con.Prepare(`
-		SELECT *
-		FROM Message
+		SELECT m.ID, u.ID, u.ClientId, m.TopicId, m.BrokerId, m.QoS, m.Message, m.CreationDate
+		FROM Message m
+		INNER JOIN User u
+		ON u.ID = m.UserId
 		WHERE
-		  TopicId = ?
+			m.TopicId = ?
 		AND
-		  BrokerId = ?
+			m.BrokerId = ?
+		ORDER BY m.CreationDate DESC
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(topicId, brokerId)
 	if err != nil {
 		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var selectMessage SelectMessage
-		rows.Scan(&selectMessage.Id, &selectMessage.UserId, &selectMessage.TopicId, &selectMessage.BrokerId, &selectMessage.QoS, &selectMessage.Message, &selectMessage.CreationDate)
+		rows.Scan(&selectMessage.Id, &selectMessage.UserId, &selectMessage.ClientId, &selectMessage.TopicId, &selectMessage.BrokerId, &selectMessage.QoS, &selectMessage.Message, &selectMessage.CreationDate)
 		selectMessageList = append(selectMessageList, selectMessage)
 	}
 
@@ -1082,14 +1189,17 @@ func SelectMessagesByTopicIdAndBrokerId(con *sql.DB, topicId int, brokerId int) 
 func SelectMessagesByTopicIdBrokerIdAndIndex(con *sql.DB, topicId int, brokerId int, index int) ([]SelectMessage, error) {
 	var selectMessageList []SelectMessage
 	stmtStr := `
-		SELECT ID, UserId, TopicId, BrokerId, QoS, Message, CreationDate
+		SELECT ID, UserId, ClientId, TopicId, BrokerId, QoS, Message, CreationDate
 		FROM (
-			ROW_NUMBER() OVER(ORDER BY ID) as RowCnt, ID, UserId, TopicId, BrokerId, QoS, Message, CreationDate
-			FROM MESSAGE
+			SELECT ROW_NUMBER() OVER(ORDER BY m.ID) RowCnt, m.ID, m.UserId, u.ClientId, m.TopicId, m.BrokerId, m.QoS, m.Message, m.CreationDate
+			FROM Message m
+			LEFT JOIN User u
+			  ON u.ID = m.UserId
 			WHERE
-				TopicId = ?
+				m.TopicId = ?
 			AND
-				BrokerId = ?
+				m.BrokerId = ?
+			ORDER BY m.CreationDate DESC
 		) MsgWithCnt
 		WHERE
 			RowCnt > ? * ?
@@ -1101,15 +1211,80 @@ func SelectMessagesByTopicIdBrokerIdAndIndex(con *sql.DB, topicId int, brokerId 
 	if err != nil {
 		return nil, fmt.Errorf("Error while preparing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
+	defer stmt.Close()
 
 	rows, err := stmt.Query(topicId, brokerId, index, LIMIT_MESSAGES, index, LIMIT_MESSAGES)
 	if err != nil {
 		return nil, fmt.Errorf("Error while querying the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var selectMessage SelectMessage
-		rows.Scan(&selectMessage.Id, &selectMessage.UserId, &selectMessage.TopicId, &selectMessage.BrokerId, &selectMessage.QoS, &selectMessage.Message, &selectMessage.CreationDate)
+		rows.Scan(&selectMessage.Id, &selectMessage.UserId, &selectMessage.ClientId, &selectMessage.TopicId, &selectMessage.BrokerId, &selectMessage.QoS, &selectMessage.Message, &selectMessage.CreationDate)
+		selectMessageList = append(selectMessageList, selectMessage)
+	}
+
+	return selectMessageList, nil
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-06-07     | Polariusz | Created |
+//
+// # Arguments
+// - con *sql.DB        : It's a connection to the database
+// - brokerId int       : Unique Identifier of table Broker
+// - topicId int        : Unique Identifier of table Topic
+// - timeFrom time.Time : Used to query rows that come past this time
+//
+// # Description
+// - Selects a list of messages from table Message matched to arguments `topicId` for messages in a Topic and `brokerId` for messages in a broker.
+// - It selects rows past the argument `timeFrom`.
+//
+// # Tables Affected
+// - Message
+//   - SELECT
+//
+// # Returns
+// - A list of struct `SelectMessage`
+// - error when:
+//   - Skill Issues
+//   - Table Message does not exist
+//     - Run SetupDatabase() before this function.
+//
+// # Author
+// - Polariusz
+func SelectMessagesByBrokerIdTopicIdAndDatetime(con *sql.DB, brokerId int, topicId int, timeFrom time.Time) ([]SelectMessage, error) {
+	var selectMessageList []SelectMessage
+
+	stmt, err := con.Prepare(`
+		SELECT m.ID, u.ID, u.ClientId, m.TopicId, m.BrokerId, m.QoS, m.Message, m.CreationDate
+		FROM Message m
+		INNER JOIN User u
+		ON u.ID = m.UserId
+		WHERE
+			m.BrokerId = ?
+		AND
+			m.TopicId = ?
+		AND
+			m.CreationDate > ?
+		ORDER BY m.CreationDate DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(brokerId, topicId, timeFrom)
+	if err != nil {
+		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var selectMessage SelectMessage
+		rows.Scan(&selectMessage.Id, &selectMessage.UserId, &selectMessage.ClientId, &selectMessage.TopicId, &selectMessage.BrokerId, &selectMessage.QoS, &selectMessage.Message, &selectMessage.CreationDate)
 		selectMessageList = append(selectMessageList, selectMessage)
 	}
 
@@ -1136,6 +1311,7 @@ func SelectMessagesByTopicIdBrokerIdAndIndex(con *sql.DB, topicId int, brokerId 
 //
 // # Used in
 // - SelectFavouriteTopicsByUserId()
+// - SelectFavouriteTopicsByBrokerIdAndUserId()
 //
 // # Author
 // - Polariusz
@@ -1150,13 +1326,15 @@ type SelectFavTopic struct {
 // | Date of change | By        | Comment |
 // +----------------+-----------+---------+
 // | 2025-05-30     | Polariusz | Created |
+// | 2025-06-07     | Polariusz | Created |
 //
 // # Arguments
 // - con *sql.DB : It's a connection to the database.
+// - userId int  : [Broker].[ID]
 // - userId int  : [User].[ID]
 //
 // # Description
-// - The function shall return a list of favourite topics matched with argument `userId` with a `SelectFavTopic` struct array.
+// - The function shall return a list of favourite topics matched with argument `brokerId` and`userId` with a `SelectFavTopic` struct array.
 //
 // # Tables Affected
 // - UserTopicFavourite
@@ -1171,7 +1349,7 @@ type SelectFavTopic struct {
 //
 // # Author
 // - Polariusz
-func SelectFavouriteTopicsByUserId(con *sql.DB, userId int) ([]SelectFavTopic, error) {
+func SelectFavouriteTopicsByBrokerIdAndUserId(con *sql.DB, brokerId int, userId int) ([]SelectFavTopic, error) {
 	var favTopicList []SelectFavTopic
 
 	stmtStr := `
@@ -1179,17 +1357,20 @@ func SelectFavouriteTopicsByUserId(con *sql.DB, userId int) ([]SelectFavTopic, e
 		FROM UserTopicFavourite utf
 		INNER JOIN Topic t
 		ON t.ID = utf.TopicId
-		WHERE utf.UserId = ?
+		WHERE utf.BrokerId = ?
+		AND utf.UserId = ?
 	`
 	stmt, err := con.Prepare(stmtStr)
 	if err != nil {
 		return nil, fmt.Errorf("Error while preparing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
+	defer stmt.Close()
 
-	rows, err := stmt.Query(userId)
+	rows, err := stmt.Query(brokerId, userId)
 	if err != nil {
 		return nil, fmt.Errorf("Error while querying the database!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
+	defer rows.Close()
 
 	for rows.Next() {
 		var favTopic SelectFavTopic
@@ -1200,17 +1381,19 @@ func SelectFavouriteTopicsByUserId(con *sql.DB, userId int) ([]SelectFavTopic, e
 	return favTopicList, nil
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-30     | Polariusz | Created |
+// | Date of change | By        | Comment                 |
+// +----------------+-----------+-------------------------+
+// | 2025-05-30     | Polariusz | Created                 |
+// | 2025-06-07     | Polariusz | Added argument brokerId |
 //
 // # Arguments
-// - con *sql.DB : It's a connection to the database.
-// - userId int  : [User].[ID]
-// - topicId int : [Topic].[ID]
+// - con *sql.DB  : It's a connection to the database.
+// - brokerId int : [Broker].[ID]
+// - userId int   : [User].[ID]
+// - topicId int  : [Topic].[ID]
 //
 // # Description
-// - The function shall insert the arguments `userId` and `topicId` into the table `UserTopicFavourite`.
+// - The function shall insert the arguments `brokerId`, `userId` and `topicId` into the table `UserTopicFavourite`.
 //
 // # Tables Affected
 // - UserTopicFavourite
@@ -1224,35 +1407,36 @@ func SelectFavouriteTopicsByUserId(con *sql.DB, userId int) ([]SelectFavTopic, e
 //
 // # Author
 // - Polariusz
-func InsertFavouriteTopic(con *sql.DB, userId int, topicId int) error {
+func InsertFavouriteTopic(con *sql.DB, brokerId int, userId int, topicId int) error {
 	stmtStr := `
-		INSERT INTO UserTopicFavourite(UserId, TopicId, CreationDate)
-		VALUES(?, ?, ?)
+		INSERT INTO UserTopicFavourite(BrokerId, UserId, TopicId, CreationDate)
+		VALUES(?, ?, ?, ?)
 	`
 
 	stmt, err := con.Prepare(stmtStr)
 	if err != nil {
 		return fmt.Errorf("Error while preparing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
+	defer stmt.Close()
 
-	if _, err := stmt.Exec(userId); err != nil {
+	if _, err := stmt.Exec(brokerId, userId, topicId, time.Now()); err != nil {
 		return fmt.Errorf("Error while executing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
 
 	return nil
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-05-30     | Polariusz | Created |
+// | Date of change | By        | Comment           |
+// +----------------+-----------+-------------------+
+// | 2025-05-30     | Polariusz | Created           |
+// | 2025-06-07     | Polariusz | Changed arguments |
 //
 // # Arguments
 // - con *sql.DB : It's a connection to the database.
-// - userId int  : [User].[ID]
-// - topicId int : [Topic].[ID]
+// - id int      : [UserTopicFavourite].[ID]
 //
 // # Description
-// - The function shall delete rows matched with arguments `userId` and `topicId` from the table `UserTopicFavourite`.
+// - The function shall delete row matched with argument `id` from the table `UserTopicFavourite`.
 //
 // # Tables Affected
 // - UserTopicFavourite
@@ -1266,19 +1450,19 @@ func InsertFavouriteTopic(con *sql.DB, userId int, topicId int) error {
 //
 // # Author
 // - Polariusz
-func DeleteFavouriteTopic(con *sql.DB, userId int, topicId int) error {
+func DeleteFavouriteTopic(con *sql.DB, id int) error {
 	stmtStr := `
 		DELETE FROM UserTopicFavourite
-		WHERE userId = ?
-		AND topicId = ?
+		WHERE ID = ?
 	`
 
 	stmt, err := con.Prepare(stmtStr)
 	if err != nil {
 		return fmt.Errorf("Error while preparing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
+	defer stmt.Close()
 
-	if _, err := stmt.Exec(userId); err != nil {
+	if _, err := stmt.Exec(id); err != nil {
 		return fmt.Errorf("Error while executing the statement!\nStatement:\n%s\nErr: %s\n", stmtStr, err)
 	}
 

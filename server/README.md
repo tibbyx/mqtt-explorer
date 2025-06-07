@@ -81,12 +81,26 @@ curl --request POST --header "Content-Type: application/json" --data '{"Ip" : "<
 }
 ```
 
+#### If an sql error has accured, the server will return a 500 (Internal Server Error) with a JSON:
+```javascript
+{
+  "InternalServerError" : "Error while inserting in the <BROKER-OR-USER> table",
+  "Error" : <ERROR-MESSAGE>
+}
+```
+
+
 #### If everything will go well, the server will return a 200 (OK) with a JSON:
 ```javascript
 {
-  "goodJson" : "Connecting to <IP>:<PORT> succeded"
+  "goodJson" : "Connecting to <IP>:<PORT> succeded",
+  "brokerId" : <BROKER-ID>,
+  "userId" : <USER-ID>,
+  "subscribedTopics" : [<SELECT-TOPIC-N>]
 }
 ```
+Note that the client needs to remember the <BROKER-ID> and <USER-ID>.
+Take a look at `database.SelectTopic` struct for the subscribed topic structure.
 
 ### To disconnect from the MQTT-Broker:
 ```bash
@@ -109,12 +123,17 @@ curl -X POST localhost:3000/disconnect
 
 ### To subscribe to a topic or multiple at once:
 ```bash
-curl --request POST --header "Content-Type: application/json" --data '{"Topics":["<TOPIC-1>", "<TOPIC-2>", "<TOPIC-N>"]}' localhost:3000/topic/subscribe
+curl --request POST --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":<BROKER-ID>, "UserId":<USER-ID>},"Topics":["<TOPIC-1>", "<TOPIC-2>", "<TOPIC-N>"]}' localhost:3000/topic/subscribe
 ```
 
 #### Or in other words, you need to POST into localhost:3000/topic/subscribe a JSON with this format:
 ```javascript
 {
+  "BrokerUserIds" :
+  {
+    "BrokerId" : <BROKER-ID>,
+    "UserId" : <USER-ID>
+  },
   "Topics" :
   [
     "<TOPIC-1>",
@@ -188,18 +207,31 @@ curl --request POST --header "Content-Type: application/json" --data '{"Topics":
 
 ### To unsubscribe to a topic or multiple at once:
 ```
-curl --request POST --header "Content-Type: application/json" --data '{"Topics":["<TOPIC-1>", "<TOPIC-2>", "<TOPIC-N>"]}' localhost:3000/topic/unsubscribe
+curl --request POST --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":<BROKER-ID>, "UserId":<USER-ID>},"Topics":["<TOPIC-1>", "<TOPIC-2>", "<TOPIC-N>"]}' localhost:3000/topic/unsubscribe
 ```
 
 #### Or in other words, you need to POST into localhost:3000/topic/unsubscribe a JSON with this format:
 ```javascript
 {
+  "BrokerUserIds" :
+  {
+    "BrokerId" : <BROKER-ID>,
+    "UserId" : <USER-ID>
+  },
   "Topics" :
   [
     "<TOPIC-1>",
     "<TOPIC-2>",
     "<TOPIC-N>"
   ]
+}
+```
+
+#### If the server encounters a database error, it will return a 500 (Internal Server Error) with a JSON:
+```javascript
+{
+  "InternalServerError" : "Error while selecting topics from database",
+  "Error" : "<SQL-ERROR-MESSAGE>"
 }
 ```
 
@@ -267,16 +299,29 @@ curl --request POST --header "Content-Type: application/json" --data '{"Topics":
 
 ### To get the subcribed list:
 ```bash
-curl localhost:3000/topic/subscribed
+curl -X GET --header "Content-Type: application/json" --data '{"BrokerId":<BROKER-ID>, "UserId":<USER-ID>}' localhost:3000/topic/subscribed
 ```
 
 #### Or in other words, you need to GET into localhost:3000/topic/unsubscribe
-_There is no need for anything to send._
+```javascript
+{
+  "BrokerId" : <BROKER-ID>,
+  "UserId" : <USER-ID>
+},
+```
 
 #### If the client has not log in with the credentials, the server will return a 401 (Unauthorized) with a JSON:
 ```javascript
 {
   "401" : "You fool!"
+}
+```
+
+#### If the server encounters a database error, it will return a 500 (Internal Server Error) with a JSON:
+```javascript
+{
+  "InternalServerError" : "Error while selecting topics from database",
+  "Error" : "<SQL-ERROR-MESSAGE>"
 }
 ```
 
@@ -294,7 +339,7 @@ _There is no need for anything to send._
 
 ### To get all known topics:
 ```bash
-curl localhost:3000/topic/all-known
+curl -X GET --header "Content-Type: Application/Json" --data '{"BrokerId":<BROKER-ID>,"UserId":<USER-ID>}' localhost:3000/topic/all-known
 ```
 
 #### If the client is not authenticated yet, the server will return a 401 (Unauthorized) with a JSON:
@@ -313,7 +358,7 @@ curl localhost:3000/topic/all-known
 
 ### To send a message:
 ```bash
-curl --request POST --header "Content-Type: application/json" --data '{"Topic" : "<TOPIC>", "Message" : "<MESSAGE>"}' localhost:3000/topic/send-message
+curl --request POST --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":<B>,"UserId":<U>},"Topic":"<T>","Message":"<M>"}' localhost:3000/topic/send-message
 ```
 
 #### If the client has not log in with the credentials, the server will return a 401 (Unauthorized) with a JSON:
@@ -339,21 +384,103 @@ curl --request POST --header "Content-Type: application/json" --data '{"Topic" :
 
 ### To get the messages matched to a topic:
 ```bash
-curl localhost:3000/topic/messages?topic=<TOPIC>
+curl -X GET --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":<BROKER-ID>, "UserId":<USER-ID>},"Topic":"<TOPIC>","Index":<INDEX>}' localhost:3000/topic/messages
 ```
 
-#### If the <TOPIC> is empty, the server will return a 400 (Bad Request) with a JSON:
+#### If the <TOPIC> is empty or <USER-ID> is less than 0 or <BROKER-ID> is less than 0, the server will return a 400 (Bad Request) with a JSON:
 ```javascript
 {
-  "error": "Missing topic query parameter"
+  "terribleJson": "The arguments in the json structure are missing"
 }
+```
+
+#### If the data structure is not a valid JSON, the server will return a 400 (Bad Request) with a JSON:
+```javascript
+{
+  "badJson": <BADJSON>
+}
+```
+
+#### If the client has not log in with the credentials, the server will return a 401 (Unauthorized) with a JSON:
+```javascript
+{
+  "Unauthorized": "The MQTT-Client is not connected to any brokers."
+}
+```
+
+#### If any database manipulation or query has failed, the server will return a 500 (Internal Server Error) with a JSON:
+```javascript
+{
+  "InternalServerError" : "Error while <WHERE> <ARGUMENTS>",
+  "Error" : "<SQL-ERROR>"
 ```
 
 #### If everything went well, the server will return a 200 (OK) with a JSON:
 ```javascript
 {
   "topic": <TOPIC>,
-  "messages": [<MESSAGE-1>, <MESSAGE-2>, <MESSAGE-N>]
+  "messages": ["<database.SelectMessage-1>", "<database.SelectMessage-2>", "<database.SelectMessage-N>"]
+}
+```
+
+### To get messages that come after given time:
+```bash
+curl -X GET --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":<BROKER-ID>, "UserId":<USER-ID>},"Topic":"<TOPIC>","TimeFrom":<DATETIME>}' localhost:3000/topic/new-messages
+```
+
+#### If the JSON structure is wrong, the server will return a 400 (Bad Request) with a JSON:
+```javascript
+{
+  "badJson" : "<BADJSON>"
+}
+```
+
+#### If the JSON structure is valid, but the arguments inside don't make sense, the server will return a 400 (Bad Request) with a JSON:
+```javascript
+{
+  "terribleJson" : "The arguments in the json structure are missing"
+}
+```
+
+#### If the topic is not known, the server will return a 400 (Bad Request) with a JSON:
+```javascript
+{
+  "badTopic" : "Topic '<TOPIC>' is not known"
+}
+```
+
+#### If the server is not connected with the Broker, it will return a 401 (Unauthorized) with a JSON:
+```javascript
+{
+  "Unauthorized" : "The MQTT-Client is not connected to any brokers"
+}
+```
+
+#### If the server encounters a SQL-Statement error, it will return a 500 (Internal Server Error) with a JSON:
+```javascript
+{
+  "InternalServerError" : "Error while selecting topics matched with broker id",
+  "Error" : "<SQL-ERROR>"
+}
+```
+Or:
+```javascript
+{
+  "InternalServerError" : "Error while selecting messages matched with broker id, topic id and datetime",
+  "Error" : "<SQL-ERROR>"
+}
+```
+
+#### If everything went well, the server will return a 200 (OK) with a JSON:
+```javascript
+{
+  "topic" : "<TOPIC>",
+  "messages" : 
+  [
+    "<MESSAGE-1>",
+    "<MESSAGE-2>",
+    "<MESSAGE-N>"
+  ]
 }
 ```
 
@@ -399,7 +526,7 @@ _Note that the function will wipe the credentials from the state, meaning that t
 
 ### To Mark a topic as favourite:
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"Topics":["<TOPIC-N>"]}' localhost:3000/topic/favourites/mark
+curl -X POST -H "Content-Type: application/json" -d '{"BrokerUserIds":{"BrokerId":<BROKER-ID>, "UserId":<USER-ID>},"Topics":["<TOPIC-N>"]}' localhost:3000/topic/favourites/mark
 ```
 
 #### If the server cannot process the json, it will return a 400 (Bad request) with a JSON:
@@ -442,7 +569,7 @@ curl -X POST -H "Content-Type: application/json" -d '{"Topics":["<TOPIC-N>"]}' l
 
 ### To Unmark a topic as favourite:
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"Topics":["<TOPIC-N>"]}' localhost:3000/topic/favourites/unmark
+curl -X POST -H "Content-Type: application/json" -d '{"BrokerUserIds":{"BrokerId":<BROKER-ID>, "UserId":<USER-ID>},"Topics":["<TOPIC-N>"]}' localhost:3000/topic/favourites/unmark
 ```
 
 #### If the server cannot process the json, it will return a 400 (Bad request) with a JSON:
@@ -485,17 +612,54 @@ curl -X POST -H "Content-Type: application/json" -d '{"Topics":["<TOPIC-N>"]}' l
 
 ### To get marked as favourite topics:
 ```bash
-curl localhost:3000/topic/favourites
+curl -X GET -H "Content-Type: application/json" -d '{"BrokerId":<BROKER-ID>, "UserId":<USER-ID>}' localhost:3000/topic/favourites
+```
+
+#### If the JSON structure is invalid, the server will return a 400 (Bad Request) with a JSON:
+```javascript
+{
+  "badJson" : <BADJSON>
+}
+```
+
+#### If the JSON structure is valid, but the arguments aren't, the server will return a 400 (Bad Request) with a JSON:
+```javascript
+{
+  "terribleJSON":"Arguments are not valid"
+}
 ```
 
 #### If the client is not authenticated, the server will return a 401 (Unauthorized) with a JSON:
 ```javascript
 {
-  "Message": "Authenticate yourself first!",
+  "Message" : "Authenticate yourself first!"
+}
+```
+
+#### If the server encounters an SQL-Statement error, it will return a 500 (Internal Server Error) with a JSON:
+```javascript
+{
+  "InternalServerError" : "<SQL-ERROR>"
 }
 ```
 
 #### If everything went well, the server will return a 200 (OK) with list of favourite topics in a JSON format:
+```javascript
 {
-  "Topics":["<TOPIC-1>", "<TOPIC-2>", "<TOPIC-N>"]
+  "Topics" :
+  [
+    <SelectFavTopic-1>,
+    <SelectFavTopic-2>,
+    <SelectFavTopic-N>
+  ]
 }
+```
+
+### Quick start:
+```bash
+curl -X POST -H "Content-Type: application/json" --data '{"Ip" : "localhost", "Port" : "1883", "ClientId" : "Jot"}' localhost:3000/credentials
+curl -X POST -H "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":1, "UserId":1},"Topics":["Yare", "Starman", "Ora"]}' localhost:3000/topic/subscribe
+curl -X GET -H "Content-Type: application/json" --data '{"BrokerId":1, "UserId":1}' localhost:3000/topic/subscribed
+curl -X POST -H "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":1,"UserId":1},"Topic":"Yare","Message":"Yare yare daze"}' localhost:3000/topic/send-message
+curl -X GET --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":1, "UserId":1},"Topic":"Yare","Index":0}' localhost:3000/topic/messages
+```
