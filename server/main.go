@@ -184,16 +184,16 @@ func main() {
 func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Post("/credentials", PostCredentialsHandler(serverState))
 	server.Post("/disconnect", PostDisconnectFromBrokerHandler(serverState))
-	server.Post("/topic/subscribe", PostTopicSubscribeHandler(serverState)) 		// TODO: I redid some of the database functions.
-	server.Post("/topic/unsubscribe", PostTopicUnsubscribeHandler(serverState))		// TODO: I redid some of the database functions. 
-	server.Get("/topic/subscribed", GetTopicSubscribedHandler(serverState))			// TODO: I redid some of the database functions. 
-	server.Post("/topic/send-message", PostTopicSendMessageHandler(serverState))	// TODO: I redid some of the database functions. 
-	server.Get("/topic/messages", GetTopicMessagesHandler(serverState))				// TODO: I redid some of the database functions. 
-	server.Get("/ping", GetPingHandler(serverState))
-	server.Get("/topic/all-known", GetTopicAllKnownHandler(serverState))
-	server.Post("/topic/favourites/mark", PostTopicFavouritesMark(serverState))
-	server.Post("/topic/favourites/unmark", PostTopicFavouritesUnmark(serverState))
-	server.Get("/topic/favourites", GetTopicFavourites(serverState))
+	server.Post("/topic/subscribe", PostTopicSubscribeHandler(serverState))
+	server.Post("/topic/unsubscribe", PostTopicUnsubscribeHandler(serverState))
+	server.Get("/topic/subscribed", GetTopicSubscribedHandler(serverState))
+	server.Post("/topic/send-message", PostTopicSendMessageHandler(serverState))
+	server.Get("/topic/messages", GetTopicMessagesHandler(serverState))
+	server.Get("/ping", GetPingHandler(serverState))									// TODO: DB
+	server.Get("/topic/all-known", GetTopicAllKnownHandler(serverState))				// TODO: DB
+	server.Post("/topic/favourites/mark", PostTopicFavouritesMark(serverState))			// TODO: DB
+	server.Post("/topic/favourites/unmark", PostTopicFavouritesUnmark(serverState))		// TODO: DB
+	server.Get("/topic/favourites", GetTopicFavourites(serverState))					// TODO: DB
 }
 
 // | Date of change | By        | Comment               |
@@ -470,7 +470,7 @@ type TopicResult struct {
 // - Polariusz
 func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if !serverState.mqttClient.IsConnectionOpen() {
+		if serverState.mqttClient == nil || !serverState.mqttClient.IsConnected() {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"Unauthorized": "The MQTT-Client is not connected to any brokers.",
 			})
@@ -517,6 +517,11 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 			}
 
 			if !isKnown {
+				// SUBSCRIBE
+				if token := serverState.mqttClient.Subscribe(toSubTopic, 0, nil); token.Wait() && token.Error() != nil {
+					fmt.Printf("ERROR: Subscribtion to topic %s failed!\n", toSubTopic)
+					continue
+				}
 				// INSERT TO TOPIC
 				topicId, err := database.InsertNewTopic(serverState.con, database.InsertTopic{subscribeTopics.BrokerUserIDs.BrokerId, toSubTopic})
 				if err != nil {
@@ -525,6 +530,7 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 					topicResult[toSubTopic] = TopicResult{"BigError", err.Error()}
 					continue
 				}
+				// INSERT TO USERTOPICSUBSCRIBED
 				if err := database.SubscribeTopic(serverState.con, subscribeTopics.BrokerUserIDs.BrokerId, subscribeTopics.BrokerUserIDs.UserId, topicId); err != nil {
 					fmt.Printf("Error in SubscribeTopic\n")
 					atLeastOneBadTopic = true
@@ -533,6 +539,12 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 				}
 				topicResult[toSubTopic] = TopicResult{"Fine", "Subscribed to the topic"}
 			} else if !isSubscribed {
+				// SUBSCRIBE
+				if token := serverState.mqttClient.Subscribe(toSubTopic, 0, nil); token.Wait() && token.Error() != nil {
+					fmt.Printf("ERROR: Subscribtion to topic %s failed!\n", toSubTopic)
+					continue
+				}
+				// INSERT TO USERTOPICSUBSCRIBED
 				err := database.SubscribeTopic(serverState.con, subscribeTopics.BrokerUserIDs.BrokerId, subscribeTopics.BrokerUserIDs.UserId, knownTopicId)
 				if err != nil {
 					fmt.Printf("Error in SubscribeTopic\n")
@@ -599,7 +611,7 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 // - Polariusz
 func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if !serverState.mqttClient.IsConnected() {
+		if serverState.mqttClient == nil || !serverState.mqttClient.IsConnected() {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"Unauthorized": "The MQTT-Client is not connected with the Broker.",
 			})
@@ -688,7 +700,7 @@ func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 // - Polariusz
 func GetTopicSubscribedHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if !serverState.mqttClient.IsConnectionOpen() {
+		if serverState.mqttClient == nil || !serverState.mqttClient.IsConnected() {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"Unauthorized": "The MQTT-Client is not connected to any brokers.",
 			})
@@ -768,7 +780,7 @@ type MessageWrapper struct {
 // - Polariusz
 func PostTopicSendMessageHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if !serverState.mqttClient.IsConnectionOpen() {
+		if serverState.mqttClient == nil || !serverState.mqttClient.IsConnected() {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"Unauthorized": "The MQTT-Client is not connected to any brokers.",
 			})
@@ -832,20 +844,14 @@ func PostTopicSendMessageHandler(serverState *ServerState) fiber.Handler {
 //   - {"Unauthorized":"Authenticate yourself first!"}
 // - 503 (Service Unavailable): JSON
 //   - The connection to the MQTT-Broker was severed.
-//   - {"ServiceUnavailable":"The Credentials suggest that the server should be connected to a broker, but it isn't!","Ip":"<BROKER-IP>","Port":"<BROKER-PORT>","ClientId":"<CLIENT-ID>"}
+//   - {"ServiceUnavailable":"The MQTT-Client is not connected to any broker"}
 //
 // # Author
 // - Polariusz
 func GetPingHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if serverState.userCreds.Ip == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"Unauthorized": "Authenticate yourself first!",
-			})
-		}
-
 		// Is it connected?
-		if serverState.mqttClient.IsConnected() {
+		if serverState.mqttClient == nil || serverState.mqttClient.IsConnected() {
 			// Is it really connected? (i.e not reconnecting)
 			if serverState.mqttClient.IsConnectionOpen() {
 				return c.Status(fiber.StatusOK).JSON(fiber.Map{
@@ -858,16 +864,8 @@ func GetPingHandler(serverState *ServerState) fiber.Handler {
 				})
 			}
 		} else {
-			// It is not connected
-			Ip := serverState.userCreds.Ip; serverState.userCreds.Ip = ""
-			Port := serverState.userCreds.Port; serverState.userCreds.Port = ""
-			ClientId := serverState.userCreds.ClientId; serverState.userCreds.ClientId = ""
-
 			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
-				"ServiceUnavailable": "The Credentials suggest that the server should be connected to a broker, but it isn't!",
-				"Ip": Ip,
-				"Port": Port,
-				"ClientId": ClientId,
+				"ServiceUnavailable": "The MQTT-Client is not connected to any broker",
 			})
 		}
 	}
@@ -1001,7 +999,7 @@ type TopicWrapper struct {
 // - Tibbyx
 func GetTopicMessagesHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if !serverState.mqttClient.IsConnectionOpen() {
+		if serverState.mqttClient == nil || !serverState.mqttClient.IsConnected() {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"Unauthorized": "The MQTT-Client is not connected to any brokers.",
 			})
@@ -1127,7 +1125,7 @@ func GetTopicAllKnownHandler(serverState *ServerState) fiber.Handler {
 // - Polariusz
 func PostDisconnectFromBrokerHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if !serverState.mqttClient.IsConnected() {
+		if serverState.mqttClient == nil || !serverState.mqttClient.IsConnected() {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"BadRequest": "The server isn't even connected to any MQTT-Brokers",
 			})
