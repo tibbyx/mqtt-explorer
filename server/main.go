@@ -184,11 +184,11 @@ func main() {
 func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Post("/credentials", PostCredentialsHandler(serverState))
 	server.Post("/disconnect", PostDisconnectFromBrokerHandler(serverState))
-	server.Post("/topic/subscribe", PostTopicSubscribeHandler(serverState))
-	server.Post("/topic/unsubscribe", PostTopicUnsubscribeHandler(serverState))
-	server.Get("/topic/subscribed", GetTopicSubscribedHandler(serverState))
-	server.Post("/topic/send-message", PostTopicSendMessageHandler(serverState))
-	server.Get("/topic/messages", GetTopicMessagesHandler(serverState))
+	server.Post("/topic/subscribe", PostTopicSubscribeHandler(serverState)) 		// TODO: I redid some of the database functions.
+	server.Post("/topic/unsubscribe", PostTopicUnsubscribeHandler(serverState))		// TODO: I redid some of the database functions. 
+	server.Get("/topic/subscribed", GetTopicSubscribedHandler(serverState))			// TODO: I redid some of the database functions. 
+	server.Post("/topic/send-message", PostTopicSendMessageHandler(serverState))	// TODO: I redid some of the database functions. 
+	server.Get("/topic/messages", GetTopicMessagesHandler(serverState))				// TODO: I redid some of the database functions. 
 	server.Get("/ping", GetPingHandler(serverState))
 	server.Get("/topic/all-known", GetTopicAllKnownHandler(serverState))
 	server.Post("/topic/favourites/mark", PostTopicFavouritesMark(serverState))
@@ -275,6 +275,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 		mqttOpts.SetDefaultPublishHandler(createMessageHandler(serverState, brokerId))
 
 		mqttClient := mqtt.NewClient(mqttOpts)
+		serverState.mqttClient = mqttClient
 
 		if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -298,8 +299,6 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 			})
 		}
 		
-		serverState.mqttClient = mqttClient
-
 		for _, topicToSub := range topicList {
 			if token := serverState.mqttClient.Subscribe(topicToSub.Topic, 0, nil); token.Wait() && token.Error() != nil {
 				fmt.Printf("ERROR: Subscribtion to topic %s failed!\n", topicToSub)
@@ -392,7 +391,7 @@ func validateCredentials(errorMessage *string, userCreds *MqttCredentials) int {
 // | 2025-06-05     | Polariusz | Added BrokerUser |
 //
 // # Structure:
-// - {"BrokerUserIds":{"BrokerId":"<B>", "UserId":"<U>"},"Topics":[<T>]}
+// - {"BrokerUserIds":{"BrokerId":<B>, "UserId":<U>},"Topics":[<T>]}
 //   - <B> : The ID of the Broker ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
 //   - <U> : The ID of the User ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
 //   - <T> : String array of topics
@@ -485,7 +484,7 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 			})
 		}
 
-		dbTopicList, err := database.SelectTopicsByBrokerIdAndUserId(serverState.con, subscribeTopics.BrokerUserIDs.BrokerId, subscribeTopics.BrokerUserIDs.UserId)
+		dbTopicList, err := database.SelectTopicsByBrokerId(serverState.con, subscribeTopics.BrokerUserIDs.BrokerId)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"InternalServerError": "Error while selecting topics from the database",
@@ -493,40 +492,59 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 			})
 		}
 
-		// TODO: Validate topics (for example if they are empty)
+		dbSubscribedTopicList, err := database.SelectSubscribedTopics(serverState.con, subscribeTopics.BrokerUserIDs.BrokerId, subscribeTopics.BrokerUserIDs.UserId)
 
 		topicResult := make(map[string]TopicResult)
 		atLeastOneBadTopic := false
 
-		for _, topic := range subscribeTopics.Topics {
-			topicId, topicStatus := getTopicSubscribedStatus(dbTopicList, topic)
-			if topicId < 0 {
-				// Topic DOES NOT EXISTS
-				if token := serverState.mqttClient.Subscribe(topic, 0, nil); token.Wait() && token.Error() != nil {
-					topicResult[topic] = TopicResult{"Error", "Make sure that the topic conforms the MQTT-Broker configuration."}
-				} else {
-					err := database.InsertNewTopic(serverState.con, database.InsertTopic{subscribeTopics.BrokerUserIDs.UserId, subscribeTopics.BrokerUserIDs.BrokerId, true, topic})
-					if err != nil {
-						topicResult[topic] = TopicResult{"BigError", err.Error()}
-					} else {
-						topicResult[topic] = TopicResult{"Fine", "Subscribed to the topic"}
-					}
+		for _, toSubTopic := range subscribeTopics.Topics {
+			isSubscribed := false
+			for _, SubTopic := range dbSubscribedTopicList {
+				if toSubTopic == SubTopic.Topic {
+					// TOPIC IS SUBSCRIBED
+					isSubscribed = true
 				}
-			} else if topicStatus {
-				// Topic DOES EXIST and IS subscribed
-				topicResult[topic] = TopicResult{"What", "The topic is already subscribed"}
+			}
+			
+			isKnown := false
+			knownTopicId := -1
+			for _, dbTopic := range dbTopicList {
+				if toSubTopic == dbTopic.Topic {
+					// TOPIC IS KNOWN
+					isKnown = true
+					knownTopicId = dbTopic.Id
+				}
+			}
+
+			if !isKnown {
+				// INSERT TO TOPIC
+				topicId, err := database.InsertNewTopic(serverState.con, database.InsertTopic{subscribeTopics.BrokerUserIDs.BrokerId, toSubTopic})
+				if err != nil {
+					fmt.Printf("Error in InsertNewTopic\n")
+					atLeastOneBadTopic = true
+					topicResult[toSubTopic] = TopicResult{"BigError", err.Error()}
+					continue
+				}
+				if err := database.SubscribeTopic(serverState.con, subscribeTopics.BrokerUserIDs.BrokerId, subscribeTopics.BrokerUserIDs.UserId, topicId); err != nil {
+					fmt.Printf("Error in SubscribeTopic\n")
+					atLeastOneBadTopic = true
+					topicResult[toSubTopic] = TopicResult{"BigError", err.Error()}
+					continue
+				}
+				topicResult[toSubTopic] = TopicResult{"Fine", "Subscribed to the topic"}
+			} else if !isSubscribed {
+				err := database.SubscribeTopic(serverState.con, subscribeTopics.BrokerUserIDs.BrokerId, subscribeTopics.BrokerUserIDs.UserId, knownTopicId)
+				if err != nil {
+					fmt.Printf("Error in SubscribeTopic\n")
+					atLeastOneBadTopic = true
+					topicResult[toSubTopic] = TopicResult{"BigError", err.Error()}
+					continue
+				}
+				topicResult[toSubTopic] = TopicResult{"Fine", "Subscribed to the topic"}
 			} else {
-				// Topic DOES EXIST and IS NOT subscribed
-				if token := serverState.mqttClient.Subscribe(topic, 0, nil); token.Wait() && token.Error() != nil {
-					topicResult[topic] = TopicResult{"Error", "Make sure that the topic conforms the MQTT-Broker configuration."}
-				} else {
-					err := database.SubscribeTopic(serverState.con, topicId)
-					if err != nil {
-						topicResult[topic] = TopicResult{"BigError", err.Error()}
-					} else {
-						topicResult[topic] = TopicResult{"Fine", "Subscribed to the topic"}
-					}
-				}
+				// WHAT
+				atLeastOneBadTopic = true
+				topicResult[toSubTopic] = TopicResult{"What", "The topic is already subscribed"}
 			}
 		}
 
@@ -542,32 +560,13 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 	}
 }
 
-// | Date of change | By        | Comment |
-// +----------------+-----------+---------+
-// | 2025-06-05     | Polariusz | Created |
-//
-// # Returns
-// - <ID>, <S>
-//   - <S>  : ID from matching argument `existingTopic` by argument `newTopic`, can be -1 if it does not match
-//   - <S>  : Subscribed bool from matching argument `existingTopic` by argument `newTopic`, can be -1 if it does not match 
-//
-// # Author
-// - Polariusz
-func getTopicSubscribedStatus(existingTopics []database.SelectTopic, newTopic string) (int, bool) {
-	for index, topic := range existingTopics {
-		if topic.Topic == newTopic {
-			return existingTopics[index].Id, existingTopics[index].Subscribed
-		}
-	}
-	return -1, false
-}
-
 // | Date of change | By        | Comment                |
 // +----------------+-----------+------------------------+
 // |                | Polariusz | Created                |
 // | 2025-05-13     | Polariusz | Documentation          |
 // | 2025-05-16     | Polariusz | Changed one 400 to 207 |
 // | 2025-06-05     | Polariusz | Integrated database    |
+// | 2025-06-07     | Polariusz | UserTopicSubscribed    |
 //
 // # Method-Type
 // - Handler
@@ -619,7 +618,7 @@ func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 		topicResult := make(map[string]TopicResult)
 		atLeastOneBadTopic := false
 
-		dbTopics, err := database.SelectTopicsByBrokerIdAndUserId(serverState.con, unsubscribeTopics.BrokerUserIDs.BrokerId, unsubscribeTopics.BrokerUserIDs.UserId)
+		dbSubscribedTopicList, err := database.SelectSubscribedTopics(serverState.con, unsubscribeTopics.BrokerUserIDs.BrokerId, unsubscribeTopics.BrokerUserIDs.UserId)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"InternalServerError" : "Error while selecting topics from database",
@@ -627,34 +626,26 @@ func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 			})
 		}
 
-		for _, topic := range unsubscribeTopics.Topics {
-			innerBad := false
-			for _, dbTopic := range dbTopics {
-				if dbTopic.Topic == topic {
-					// found matching topic
-					if dbTopic.Subscribed {
-						// The matched topic is subscribed
-						serverState.mqttClient.Unsubscribe(topic)
-						database.UnsubscribeTopic(serverState.con, dbTopic.Id)
-						topicResult[topic] = TopicResult{"Fine", "Unsubscribed successfully"}
-
-					} else {
-						// The topic matches, but is not subscribed
+		for _, toUnsubTopic := range unsubscribeTopics.Topics {
+			isSubscribed := false
+			for _, subTopic := range dbSubscribedTopicList {
+				if toUnsubTopic == subTopic.Topic {
+					isSubscribed = true
+					if err := database.UnsubscribeTopic(serverState.con, unsubscribeTopics.BrokerUserIDs.BrokerId, unsubscribeTopics.BrokerUserIDs.UserId, subTopic.Id); err != nil {
 						atLeastOneBadTopic = true
-						topicResult[topic] = TopicResult{"What", "The topic wasn't even subscribed"}
+						topicResult[toUnsubTopic] = TopicResult{"BigError", err.Error()}
+						continue
 					}
+					topicResult[toUnsubTopic] = TopicResult{"Fine", "Unsubscribed to the topic"}
 				}
 			}
-			if innerBad == true {
-				// The topic does not exist
+			if !isSubscribed {
 				atLeastOneBadTopic = true
-				topicResult[topic] = TopicResult{"ClientError", "The topic does not exist"}
+				topicResult[toUnsubTopic] = TopicResult{"What", "The topic is not subscribed"}
 			}
 		}
 
 		if atLeastOneBadTopic {
-			// TODO: The status code is meh, as the function at this point would
-			// subscribe to at least some of the requested topics.
 			return c.Status(fiber.StatusMultiStatus).JSON(fiber.Map{
 				"result": topicResult,
 			})
@@ -955,9 +946,32 @@ func createMessageHandler(serverState *ServerState, brokerId int) mqtt.MessageHa
 	}
 }
 
-// | Date of change | By     | Comment                 |
-// +----------------+--------+-------------------------+
-// | 2025-05-14     | Tibbyx | Created & Documentation |
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-06-06     | Polariusz | Created |
+//
+// # Structure:
+// - {"BrokerUserIds":{"BrokerId":<B>, "UserId":<U>},"Topics":"<T>","Index":<I>}
+//   - <B> : The ID of the Broker ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
+//   - <U> : The ID of the User ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
+//   - <T> : The Topic
+//   - <I> : The query index, Select from `database.LIMIT_MESSAGES*index` to `database.LIMIT_MESSAGES*(1+index)` messages. If is less than 0, it will query all messages.
+//
+// # Used in
+// - GetTopicMessagesHandler()
+//
+// # Author
+// - Polariusz
+type TopicWrapper struct {
+	BrokerUserIDs BrokerUser
+	Topic string
+	Index int
+}
+
+// | Date of change | By        | Comment                 |
+// +----------------+-----------+-------------------------+
+// | 2025-05-14     | Tibbyx    | Created & Documentation |
+// | 2025-06-06     | Polariusz | Integrated with DB      |
 //
 // # Method-Type
 // - Handler
@@ -965,37 +979,87 @@ func createMessageHandler(serverState *ServerState, brokerId int) mqtt.MessageHa
 // # Description
 // - The method shall be a handler that returns all stored messages for a specific topic.
 // - The messages must have previously been received through an active MQTT subscription.
-// - The topic is provided as a query parameter.
+// - The topic is provided in the --data JSON
 //
 // # Usage
 // - Call declared by the routing method addRoutes() URL with the GET-Method.
-// - URL must include ?topic=<topic-name>
+// - A data must be included that matches the structure of `TopicWrapper`.
 //
 // # Returns
 // - 200 (Ok): JSON
-//   - {"topic": "<topic-name>", "messages": ["msg1", "msg2", ...]}
+//   - {"topic": "<topic-name>", "messages": [<`database.SelectMessage`>]}
 // - 400 (Bad Request): JSON
-//   - {"error": "Missing topic query parameter"}
+//   - {"badJson":"`BADJSON`"}
+//   - {"terribleJson":"The arguments in the json structure are missing"}
+//   - {"terribleJson":"The argument `Topic` does not match the database."}
+// - 401 (Unauthorized): JSON
+//   - {"Unauthorized": "The MQTT-Client is not connected to any brokers."}
+// - 500 (Internal Server Error): JSON
+//   - {"InternalServerError":"Error while <Where> <Arguments>", "Error":"<SQL-Error>"}
 //
 // # Author
 // - Tibbyx
 func GetTopicMessagesHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		topic := c.Query("topic")
-		if topic == "" {
+		if !serverState.mqttClient.IsConnectionOpen() {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"Unauthorized": "The MQTT-Client is not connected to any brokers.",
+			})
+		}
+		var topicWrapper TopicWrapper
+		if err := c.BodyParser(&topicWrapper); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Missing topic query parameter",
+				"badJson": BADJSON,
+			})
+		}
+		if topicWrapper.BrokerUserIDs.BrokerId < 0 || topicWrapper.BrokerUserIDs.UserId < 0 || topicWrapper.Topic == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"terribleJson": "The arguments in the json structure are missing",
 			})
 		}
 
-		messages, ok := serverState.receivedMessages[topic]
-		if !ok {
-			messages = []string{}
+		topicId := -1
+		topicList, err := database.SelectTopicsByBrokerId(serverState.con, topicWrapper.BrokerUserIDs.BrokerId)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"InternalServerError" : "Error while selecting topics matched with broker and user id",
+				"Error" : err.Error(),
+			})
+		}
+		for _, dbTopic := range topicList {
+			if dbTopic.Topic == topicWrapper.Topic {
+				topicId = dbTopic.Id
+				break
+			}
+		}
+		if topicId == -1 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"terribleJson": "The argument `Topic` does not match the database.",
+			})
+		}
+
+		var messageList []database.SelectMessage
+		if topicWrapper.Index < 0 {
+			messageList, err = database.SelectMessagesByTopicIdAndBrokerId(serverState.con, topicId, topicWrapper.BrokerUserIDs.BrokerId)
+			if err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"InternalServerError" : "Error while selecting messages matched with topic and broker",
+					"Error" : err.Error(),
+				})
+			}
+		} else {
+			messageList, err = database.SelectMessagesByTopicIdBrokerIdAndIndex(serverState.con, topicId, topicWrapper.BrokerUserIDs.BrokerId, topicWrapper.Index)
+			if err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"InternalServerError" : "Error while selecting messages matched with topic, broker and index",
+					"Error" : err.Error(),
+				})
+			}
 		}
 
 		return c.JSON(fiber.Map{
-			"topic": topic,
-			"messages": messages,
+			"topic": topicWrapper.Topic,
+			"messages": messageList,
 		})
 	}
 }

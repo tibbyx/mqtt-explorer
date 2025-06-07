@@ -358,7 +358,7 @@ curl localhost:3000/topic/all-known
 
 ### To send a message:
 ```bash
-curl --request POST --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":<B>,"UserId":<U>},"Topic":<T>,"Message":"<M>"}' localhost:3000/topic/send-message
+curl --request POST --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":<B>,"UserId":<U>},"Topic":"<T>","Message":"<M>"}' localhost:3000/topic/send-message
 ```
 
 #### If the client has not log in with the credentials, the server will return a 401 (Unauthorized) with a JSON:
@@ -384,21 +384,42 @@ curl --request POST --header "Content-Type: application/json" --data '{"BrokerUs
 
 ### To get the messages matched to a topic:
 ```bash
-curl localhost:3000/topic/messages?topic=<TOPIC>
+curl -X GET --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":<BROKER-ID>, "UserId":<USER-ID>},"Topic":"<TOPIC>"}' localhost:3000/topic/messages
 ```
 
-#### If the <TOPIC> is empty, the server will return a 400 (Bad Request) with a JSON:
+#### If the <TOPIC> is empty or <USER-ID> is less than 0 or <BROKER-ID> is less than 0, the server will return a 400 (Bad Request) with a JSON:
 ```javascript
 {
-  "error": "Missing topic query parameter"
+  "terribleJson": "The arguments in the json structure are missing"
 }
+```
+
+#### If the data structure is not a valid JSON, the server will return a 400 (Bad Request) with a JSON:
+```javascript
+{
+  "badJson": <BADJSON>
+}
+```
+
+#### If the client has not log in with the credentials, the server will return a 401 (Unauthorized) with a JSON:
+```javascript
+{
+  "Unauthorized": "The MQTT-Client is not connected to any brokers."
+}
+```
+
+#### If any database manipulation or query has failed, the server will return a 500 (Internal Server Error) with a JSON:
+```javascript
+{
+  "InternalServerError" : "Error while <WHERE> <ARGUMENTS>",
+  "Error" : "<SQL-ERROR>"
 ```
 
 #### If everything went well, the server will return a 200 (OK) with a JSON:
 ```javascript
 {
   "topic": <TOPIC>,
-  "messages": [<MESSAGE-1>, <MESSAGE-2>, <MESSAGE-N>]
+  "messages": ["<database.SelectMessage-1>", "<database.SelectMessage-2>", "<database.SelectMessage-N>"]
 }
 ```
 
