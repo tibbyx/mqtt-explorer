@@ -1228,6 +1228,69 @@ func SelectMessagesByTopicIdBrokerIdAndIndex(con *sql.DB, topicId int, brokerId 
 	return selectMessageList, nil
 }
 
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-06-07     | Polariusz | Created |
+//
+// # Arguments
+// - con *sql.DB        : It's a connection to the database
+// - brokerId int       : Unique Identifier of table Broker
+// - topicId int        : Unique Identifier of table Topic
+// - timeFrom time.Time : Used to query rows that come past this time
+//
+// # Description
+// - Selects a list of messages from table Message matched to arguments `topicId` for messages in a Topic and `brokerId` for messages in a broker.
+// - It selects rows past the argument `timeFrom`.
+//
+// # Tables Affected
+// - Message
+//   - SELECT
+//
+// # Returns
+// - A list of struct `SelectMessage`
+// - error when:
+//   - Skill Issues
+//   - Table Message does not exist
+//     - Run SetupDatabase() before this function.
+//
+// # Author
+// - Polariusz
+func SelectMessagesByBrokerIdTopicIdAndDatetime(con *sql.DB, brokerId int, topicId int, timeFrom time.Time) ([]SelectMessage, error) {
+	var selectMessageList []SelectMessage
+
+	stmt, err := con.Prepare(`
+		SELECT m.ID, u.ID, u.ClientId, m.TopicId, m.BrokerId, m.QoS, m.Message, m.CreationDate
+		FROM Message m
+		INNER JOIN User u
+		ON u.ID = m.UserId
+		WHERE
+			m.BrokerId = ?
+		AND
+			m.TopicId = ?
+		AND
+			m.CreationDate > ?
+		ORDER BY m.CreationDate DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(brokerId, topicId, timeFrom)
+	if err != nil {
+		return nil, fmt.Errorf("Skill issues\nErr: %s\n", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var selectMessage SelectMessage
+		rows.Scan(&selectMessage.Id, &selectMessage.UserId, &selectMessage.ClientId, &selectMessage.TopicId, &selectMessage.BrokerId, &selectMessage.QoS, &selectMessage.Message, &selectMessage.CreationDate)
+		selectMessageList = append(selectMessageList, selectMessage)
+	}
+
+	return selectMessageList, nil
+}
+
 /*                                       +----------+                                       */
 /* --------------------------------------| FAVTOPIC |-------------------------------------- */
 /*                                       +----------+                                       */

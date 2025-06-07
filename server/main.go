@@ -182,10 +182,11 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Get("/topic/subscribed", GetTopicSubscribedHandler(serverState))
 	server.Post("/topic/send-message", PostTopicSendMessageHandler(serverState))
 	server.Get("/topic/messages", GetTopicMessagesHandler(serverState))
+	server.Get("/topic/new-messages", GetTopicNewMessagesHandler(serverState))
 	server.Get("/ping", GetPingHandler(serverState))
 	server.Get("/topic/all-known", GetTopicAllKnownHandler(serverState))
 	server.Post("/topic/favourites/mark", PostTopicFavouritesMark(serverState))
-	server.Post("/topic/favourites/unmark", PostTopicFavouritesUnmark(serverState))		// TODO: DB
+	server.Post("/topic/favourites/unmark", PostTopicFavouritesUnmark(serverState))
 	server.Get("/topic/favourites", GetTopicFavourites(serverState))
 }
 
@@ -1013,7 +1014,7 @@ func GetTopicMessagesHandler(serverState *ServerState) fiber.Handler {
 		topicId := -1
 		topicList, err := database.SelectTopicsByBrokerId(serverState.con, topicWrapper.BrokerUserIDs.BrokerId)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"InternalServerError" : "Error while selecting topics matched with broker and user id",
 				"Error" : err.Error(),
 			})
@@ -1034,7 +1035,7 @@ func GetTopicMessagesHandler(serverState *ServerState) fiber.Handler {
 		if topicWrapper.Index < 0 {
 			messageList, err = database.SelectMessagesByTopicIdAndBrokerId(serverState.con, topicId, topicWrapper.BrokerUserIDs.BrokerId)
 			if err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 					"InternalServerError" : "Error while selecting messages matched with topic and broker",
 					"Error" : err.Error(),
 				})
@@ -1042,7 +1043,7 @@ func GetTopicMessagesHandler(serverState *ServerState) fiber.Handler {
 		} else {
 			messageList, err = database.SelectMessagesByTopicIdBrokerIdAndIndex(serverState.con, topicId, topicWrapper.BrokerUserIDs.BrokerId, topicWrapper.Index)
 			if err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 					"InternalServerError" : "Error while selecting messages matched with topic, broker and index",
 					"Error" : err.Error(),
 				})
@@ -1052,6 +1053,114 @@ func GetTopicMessagesHandler(serverState *ServerState) fiber.Handler {
 		return c.JSON(fiber.Map{
 			"topic": topicWrapper.Topic,
 			"messages": messageList,
+		})
+	}
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-06-07     | Polariusz | Created |
+//
+// # Structure:
+// - {"BrokerUserIDs":{"BrokerId":<B>,"UserId":<U>},"Topic":"<T>","TimeFrom":"<D>"}
+//   - <B> : The ID of the Broker ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
+//   - <U> : The ID of the User ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
+//   - <T> : Topic name
+//   - <D> : DateTime
+//
+// # Used in
+// - type TopicsWrapper struct
+//
+// # Author
+// - Polariusz
+type GetNewMessages struct {
+	BrokerUserIDs BrokerUser
+	Topic string
+	TimeFrom time.Time
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-06-07     | Polariusz | Created |
+//
+// # Method-Type
+// - Handler
+//
+// # Description
+// - The method shall be a handler that returns all stored messages for a specific topic since the argument given TimeFrom.
+//
+// # Usage
+// - Call declared by the routing method addRoutes() URL with the GET-Method.
+// - A data must be included that matches the structure of `TopicWrapper`.
+//
+// # Returns
+// - 200 (Ok): JSON
+//   - {"topic":"<TOPIC>","messages":["<MESSAGE-1>","<MESSAGE-2>","<MESSAGE-N>"]}
+// - 400 (Bad Request): JSON
+//   - {"badJson":"`BADJSON`"}
+//   - {"terribleJson":"The arguments in the json structure are missing"}
+//   - {"badTopic":"Topic '<TOPIC>' is not known"}
+// - 401 (Unauthorized): JSON
+//   - {"Unauthorized": "The MQTT-Client is not connected to any brokers"}
+// - 500 (Internal Server Error): JSON
+//   - {"InternalServerError":"Error while selecting topics matched with broker id","Error":"<SQL-ERROR>"}
+//   - {"InternalServerError":"Error while selecting messages matched with broker id, topic id and datetime","Error":"<SQL-ERROR>"}
+//
+// # Author
+// - Polariusz
+func GetTopicNewMessagesHandler(serverState *ServerState) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if serverState.mqttClient == nil || !serverState.mqttClient.IsConnected() {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"Unauthorized": "The MQTT-Client is not connected to any brokers",
+			})
+		}
+
+		var getNewMessages GetNewMessages
+		if err := c.BodyParser(&getNewMessages); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"badJson": BADJSON,
+			})
+		}
+		if getNewMessages.BrokerUserIDs.BrokerId <= 0 || getNewMessages.BrokerUserIDs.UserId <= 0 || getNewMessages.Topic == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"terribleJson": "The arguments in the json structure are missing",
+			})
+		}
+
+		dbTopicList, err := database.SelectTopicsByBrokerId(serverState.con, getNewMessages.BrokerUserIDs.BrokerId)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"InternalServerError" : "Error while selecting topics matched with broker id",
+				"Error" : err.Error(),
+			})
+		}
+
+		topicId := -1
+		for _, dbTopic := range dbTopicList {
+			if getNewMessages.Topic == dbTopic.Topic {
+				topicId = dbTopic.Id
+				break
+			}
+		}
+		if topicId == -1 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"topic": getNewMessages.Topic,
+				"badTopic": fmt.Sprintf("Topic '%s' is not known", getNewMessages.Topic),
+			})
+		}
+
+		newMessageList, err := database.SelectMessagesByBrokerIdTopicIdAndDatetime(serverState.con, getNewMessages.BrokerUserIDs.BrokerId, topicId, getNewMessages.TimeFrom)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"InternalServerError" : "Error while selecting messages matched with broker id, topic id and datetime",
+				"Error" : err.Error(),
+			})
+		}
+
+		return c.JSON(fiber.Map{
+			"topic": getNewMessages.Topic,
+			"messages": newMessageList,
 		})
 	}
 }

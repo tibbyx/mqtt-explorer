@@ -423,6 +423,67 @@ curl -X GET --header "Content-Type: application/json" --data '{"BrokerUserIds":{
 }
 ```
 
+### To get messages that come after given time:
+```bash
+curl -X GET --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":<BROKER-ID>, "UserId":<USER-ID>},"Topic":"<TOPIC>","TimeFrom":<DATETIME>}' localhost:3000/topic/new-messages
+```
+
+#### If the JSON structure is wrong, the server will return a 400 (Bad Request) with a JSON:
+```javascript
+{
+  "badJson" : "<BADJSON>"
+}
+```
+
+#### If the JSON structure is valid, but the arguments inside don't make sense, the server will return a 400 (Bad Request) with a JSON:
+```javascript
+{
+  "terribleJson" : "The arguments in the json structure are missing"
+}
+```
+
+#### If the topic is not known, the server will return a 400 (Bad Request) with a JSON:
+```javascript
+{
+  "badTopic" : "Topic '<TOPIC>' is not known"
+}
+```
+
+#### If the server is not connected with the Broker, it will return a 401 (Unauthorized) with a JSON:
+```javascript
+{
+  "Unauthorized" : "The MQTT-Client is not connected to any brokers"
+}
+```
+
+#### If the server encounters a SQL-Statement error, it will return a 500 (Internal Server Error) with a JSON:
+```javascript
+{
+  "InternalServerError" : "Error while selecting topics matched with broker id",
+  "Error" : "<SQL-ERROR>"
+}
+```
+Or:
+```javascript
+{
+  "InternalServerError" : "Error while selecting messages matched with broker id, topic id and datetime",
+  "Error" : "<SQL-ERROR>"
+}
+```
+
+#### If everything went well, the server will return a 200 (OK) with a JSON:
+```javascript
+{
+  "topic" : "<TOPIC>",
+  "messages" : 
+  [
+    "<MESSAGE-1>",
+    "<MESSAGE-2>",
+    "<MESSAGE-N>"
+  ]
+}
+```
+
 ### To check if the go server is still connected to the MQTT-Broker:
 ```bash
 curl localhost:3000/ping
