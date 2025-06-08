@@ -1,6 +1,9 @@
 package main
 
 import (
+	"os"
+	"log"
+
 	"database"
 	"database/sql"
 	"encoding/json"
@@ -12,6 +15,49 @@ import (
 	"time"
 	"strconv"
 )
+
+// # Author
+// - Polariusz
+const LOG_FILE_NAME string = "log.txt"
+
+// # Author
+// - Polariusz
+func buildLogMessage(logType LOG_TYPE, msg string, errorMsg string) string {
+	logName := logTypeName[logType]
+	var logMsg string
+	if errorMsg == "" {
+		logMsg = fmt.Sprintf("%s : %s\n", logName, msg)
+	} else {
+		logMsg = fmt.Sprintf("%s : %s : %s\n", logName, msg, errorMsg)
+	}
+	fmt.Print(logMsg)
+	return logMsg
+}
+
+// # Author
+// - Polariusz
+type LOG_TYPE int
+
+// # Author
+// - Polariusz
+const (
+	TYPE LOG_TYPE = iota
+	OK
+	WARN
+	CERR
+	ERROR
+	FATAL
+)
+
+// # Author
+// - Polariusz
+var logTypeName = map[LOG_TYPE]string {
+	OK:          "\033[94m|OK   |\033[0m",
+	WARN:        "\033[33m|WARN |\033[0m",
+	CERR:        "\033[35m|WARN |\033[0m",
+	ERROR:       "\033[91m|ERROR|\033[0m",
+	FATAL:       "\033[31m|FATAL|\033[0m",
+}
 
 // | Date of change | By        | Comment |
 // +----------------+-----------+---------+
@@ -143,12 +189,21 @@ func (mc MqttCredentials) dump() {
 // # Author
 // - Polariusz
 func main() {
+	logFile, err := os.OpenFile(LOG_FILE_NAME, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		log.Panic(err)
+	}
+	defer logFile.Close()
+	log.SetOutput(logFile)
+	log.SetFlags(log.Lshortfile | log.LstdFlags)
+	log.Printf(buildLogMessage(OK, "Started Log", ""))
+
 	con, err := database.OpenDatabase()
 	if err != nil {
-		fmt.Printf("WARN: Running without database\nErr:%s\n", err)
+		log.Printf(buildLogMessage(FATAL, "Could not open the database", err.Error()))
 	}
 	if err := database.SetupDatabase(con); err != nil {
-		fmt.Printf("WARN: Issue with setting db up!\nErr:%s\n", err)
+		log.Printf(buildLogMessage(FATAL, "Issue with setting the database up", err.Error()))
 	}
 
 	server := fiber.New()
@@ -243,6 +298,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 		var userCreds MqttCredentials
 
 		if err := c.BodyParser(&userCreds); err != nil {
+			log.Printf(buildLogMessage(CERR, "Bad JSON detected", err.Error()))
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"badJson": BADJSON,
 			})
@@ -251,6 +307,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 		{
 			errorMessage := ""
 			if validateCredentials(&errorMessage, &userCreds) != 0 {
+				log.Printf(buildLogMessage(CERR, "Args in JSON are invalid", errorMessage))
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 					"badJson": errorMessage,
 				})
@@ -262,6 +319,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 		port, _ := strconv.Atoi(userCreds.Port)
 		brokerId, err := database.InsertNewBroker(serverState.con, database.InsertBroker{userCreds.Ip, port})
 		if err != nil {
+			log.Printf(buildLogMessage(FATAL, "Error while calling database.InsertNewBroker() function", err.Error()))
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"InternalServerError" : "Error while inserting in the Broker table",
 				"Error" : err.Error(),
@@ -279,6 +337,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 		serverState.mqttClient = mqttClient
 
 		if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
+			log.Printf(buildLogMessage(CERR, "MQTT Args are invalid", err.Error()))
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"badJson": fmt.Sprintf("Connecting to %s:%s failed\n%s", userCreds.Ip, userCreds.Port, token.Error()),
 			})
@@ -286,6 +345,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 
 		userId, err := database.InsertNewUser(serverState.con, database.InsertUser{brokerId, userCreds.ClientId, userCreds.Username, userCreds.Password, false})
 		if err != nil {
+			log.Printf(buildLogMessage(FATAL, "Error while calling database.InsertNewUser() function", err.Error()))
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"InternalServerError" : "Error while inserting in the User table",
 				"Error" : err.Error(),
@@ -294,6 +354,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 
 		topicList, err := database.SelectSubscribedTopics(serverState.con, brokerId, userId)
 		if err != nil {
+			log.Printf(buildLogMessage(FATAL, "Error while calling database.SelectSubscribedTopics() function", err.Error()))
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"InternalServerError" : "Error while selecting subscribed topics",
 				"Error" : err.Error(),
@@ -302,10 +363,11 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 		
 		for _, topicToSub := range topicList {
 			if token := serverState.mqttClient.Subscribe(topicToSub.Topic, 0, nil); token.Wait() && token.Error() != nil {
-				fmt.Printf("ERROR: Subscribtion to topic %s failed!\n", topicToSub)
+				log.Printf(buildLogMessage(ERROR, fmt.Sprintf("Error while subscribing to %s", topicToSub), err.Error()))
 			}
 		}
 
+		log.Printf(buildLogMessage(OK, fmt.Sprintf("Connected to Broker %s:%s", userCreds.Ip, userCreds.Port), ""))
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"goodJson" : fmt.Sprintf("Connecting to %s:%s succeded", userCreds.Ip, userCreds.Port),
 			"brokerId" : brokerId,
