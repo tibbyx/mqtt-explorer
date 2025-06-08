@@ -529,6 +529,7 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 				// SUBSCRIBE
 				if token := serverState.mqttClient.Subscribe(toSubTopic, 0, nil); token.Wait() && token.Error() != nil {
 					fmt.Printf("ERROR: Subscription to topic %s failed!\n", toSubTopic)
+					topicResult[toSubTopic] = TopicResult{"BigError", err.Error()}
 					continue
 				}
 				// INSERT TO TOPIC
@@ -551,6 +552,7 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 				// SUBSCRIBE
 				if token := serverState.mqttClient.Subscribe(toSubTopic, 0, nil); token.Wait() && token.Error() != nil {
 					fmt.Printf("ERROR: Subscribtion to topic %s failed!\n", toSubTopic)
+					topicResult[toSubTopic] = TopicResult{"BigError", err.Error()}
 					continue
 				}
 				// INSERT TO USERTOPICSUBSCRIBED
