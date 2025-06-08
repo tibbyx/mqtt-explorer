@@ -658,7 +658,7 @@ func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 			for _, subTopic := range dbSubscribedTopicList {
 				if toUnsubTopic == subTopic.Topic {
 					isSubscribed = true
-					if err := database.UnsubscribeTopic(serverState.con, unsubscribeTopics.BrokerUserIDs.BrokerId, unsubscribeTopics.BrokerUserIDs.UserId, subTopic.Id); err != nil {
+					if err := database.UnsubscribeTopic(serverState.con, unsubscribeTopics.BrokerUserIDs.BrokerId, unsubscribeTopics.BrokerUserIDs.UserId, subTopic.TopicId); err != nil {
 						atLeastOneBadTopic = true
 						topicResult[toUnsubTopic] = TopicResult{"BigError", err.Error()}
 						continue
