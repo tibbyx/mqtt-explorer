@@ -192,6 +192,7 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Get("/topic/new-messages", GetTopicNewMessagesHandler(serverState))
 	server.Get("/ping", GetPingHandler(serverState))
 	server.Get("/topic/all-known", GetTopicAllKnownHandler(serverState))
+	server.Post("/topic/all-known-subscribed", PostTopicAllKnownSubscribedHandler(serverState))
 	server.Post("/topic/favourites/mark", PostTopicFavouritesMark(serverState))
 	server.Post("/topic/favourites/unmark", PostTopicFavouritesUnmark(serverState))
 	server.Get("/topic/favourites", GetTopicFavourites(serverState))
@@ -1204,7 +1205,7 @@ func GetTopicNewMessagesHandler(serverState *ServerState) fiber.Handler {
 // - Handler
 //
 // # Description
-// - The method shall return a list of all previously subscribed Topics in a JSON format
+// - The method shall return a list known topics.
 // - The method shall return a 200 (Ok) with the list if user is authenticated
 // - The method shall return a 401 (Unauthorized) if the user is not authenticated
 //
@@ -1248,6 +1249,70 @@ func GetTopicAllKnownHandler(serverState *ServerState) fiber.Handler {
 		}
 
 		topicList, err := database.SelectTopicsByBrokerId(serverState.con, brokerUser.BrokerId)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"InternalServerError": err.Error(),
+			})
+		}
+
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"Topics": topicList,
+		})
+	}
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-06-08     | Polariusz | Created |
+//
+// # Method-Type
+// - Handler
+//
+// # Description
+// - The method shall return a list of all known topics and if these are subscribed or not
+// - The method shall return a 200 (Ok) with the list if user is authenticated
+// - The method shall return a 401 (Unauthorized) if the user is not authenticated
+//
+// # Usage
+// - Call declared by the routing method addRoutes() URL with the GET-Method.
+// - The client shall post a JSON that matches the structure of `BrokerUser`.
+//
+// # Returns
+// - 200 (Ok): JSON
+//   - {"Topics":[<TOPIC-N>]}
+// - 400 (Bad Request): JSON
+//   - {"badJson":`const BADJSON`}
+// - 401 (Unauthorized): JSON
+//   - {"Unauthorized":"The MQTT-Client is not connected to any brokers"}
+// - 500 (Internal Server Error): JSON
+//   - {"InternalServerError":"<SQL-ERROR>"}
+//
+// # Author
+// - Polariusz
+func PostTopicAllKnownSubscribedHandler(serverState *ServerState) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if serverState.mqttClient == nil || !serverState.mqttClient.IsConnected() {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				// TODO: Explain the message a bit more
+				"Unauthorized": "The MQTT-Client is not connected to any brokers",
+			})
+		}
+
+		var brokerUser BrokerUser
+
+		if err := c.BodyParser(&brokerUser); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"badJson": BADJSON,
+			})
+		}
+
+		if brokerUser.BrokerId <= 0 || brokerUser.UserId <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"terribleJson": "Arguments are not valid",
+			})
+		}
+
+		topicList, err := database.SelectTopicsByBrokerIdAndUserId(serverState.con, brokerUser.BrokerId, brokerUser.UserId)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"InternalServerError": err.Error(),
