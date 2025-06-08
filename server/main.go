@@ -196,7 +196,7 @@ func main() {
 	defer logFile.Close()
 	log.SetOutput(logFile)
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
-	log.Printf(buildLogMessage(OK, "Started Log", ""))
+	log.Printf(buildLogMessage(OK, "Started Logger", ""))
 
 	con, err := database.OpenDatabase()
 	if err != nil {
@@ -217,6 +217,7 @@ func main() {
 	serverState.con = con
 
 	addRoutes(server, &serverState)
+	log.Printf(buildLogMessage(OK, "Server Ready for MQTT-Sessions", ""))
 
 	// need to build ui via 'npm run build' in client first
 	server.Static("/", "../client/dist")
@@ -295,6 +296,7 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 // - Polariusz
 func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		log.Printf(buildLogMessage(OK, "Received /credentials", ""))
 
 		var userCreds MqttCredentials
 
@@ -317,6 +319,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 
 		// It it is connected, disconnect first!
 		if serverState.mqttClient != nil && serverState.mqttClient.IsConnected() {
+			log.Printf(buildLogMessage(WARN, "Disconnecting from Connected Broker", ""))
 			serverState.mqttClient.Disconnect(250)
 		}
 
@@ -370,7 +373,9 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 		for _, topicToSub := range topicList {
 			if token := serverState.mqttClient.Subscribe(topicToSub.Topic, 0, nil); token.Wait() && token.Error() != nil {
 				log.Printf(buildLogMessage(ERROR, fmt.Sprintf("Error while subscribing to %s", topicToSub), err.Error()))
+				continue
 			}
+			log.Printf(buildLogMessage(OK, fmt.Sprintf("Subscribed to topic: '%s' automatically", topicToSub), ))
 		}
 
 		log.Printf(buildLogMessage(OK, fmt.Sprintf("Connected to Broker %s:%s", userCreds.Ip, userCreds.Port), ""))
@@ -540,7 +545,10 @@ type TopicResult struct {
 // - Polariusz
 func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		log.Printf(buildLogMessage(OK, "Received /topic/subscribe", ""))
+
 		if serverState.mqttClient == nil || !serverState.mqttClient.IsConnected() {
+			log.Printf(buildLogMessage(CERR, "Client is not authenticated", ""))
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"Unauthorized": "The MQTT-Client is not connected to any brokers.",
 			})
@@ -549,12 +557,14 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 		var subscribeTopics TopicsWrapper
 
 		if err := c.BodyParser(&subscribeTopics); err != nil {
+			log.Printf(buildLogMessage(CERR, "Client's JSON is not valid", ""))
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"badJson": BADJSON,
 			})
 		}
 
 		if subscribeTopics.BrokerUserIDs.BrokerId <= 0 || subscribeTopics.BrokerUserIDs.UserId <= 0 {
+			log.Printf(buildLogMessage(CERR, "Client's JSON does not have valid arguments", ""))
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"terribleJson": "Arguments are not valid",
 			})
@@ -562,6 +572,7 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 
 		dbTopicList, err := database.SelectTopicsByBrokerId(serverState.con, subscribeTopics.BrokerUserIDs.BrokerId)
 		if err != nil {
+			log.Printf(buildLogMessage(ERROR, "Error while selecting topics from the database", err.Error()))
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"InternalServerError": "Error while selecting topics from the database",
 				"Error": err.Error(),
@@ -595,55 +606,61 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 			if !isKnown {
 				// SUBSCRIBE
 				if token := serverState.mqttClient.Subscribe(toSubTopic, 0, nil); token.Wait() && token.Error() != nil {
-					fmt.Printf("ERROR: Subscription to topic %s failed!\n", toSubTopic)
+					log.Printf(buildLogMessage(ERROR, fmt.Sprintf("ERROR: Subscription to topic %s failed!", toSubTopic), token.Error().Error()))
+					atLeastOneBadTopic = true
 					topicResult[toSubTopic] = TopicResult{"BigError", err.Error()}
 					continue
 				}
 				// INSERT TO TOPIC
 				topicId, err := database.InsertNewTopic(serverState.con, database.InsertTopic{subscribeTopics.BrokerUserIDs.BrokerId, toSubTopic})
 				if err != nil {
-					fmt.Printf("Error in InsertNewTopic\n")
+					log.Printf(buildLogMessage(ERROR, fmt.Sprintf("Error in InsertNewTopic", toSubTopic), err.Error()))
 					atLeastOneBadTopic = true
 					topicResult[toSubTopic] = TopicResult{"BigError", err.Error()}
 					continue
 				}
 				// INSERT TO USERTOPICSUBSCRIBED
 				if err := database.SubscribeTopic(serverState.con, subscribeTopics.BrokerUserIDs.BrokerId, subscribeTopics.BrokerUserIDs.UserId, topicId); err != nil {
-					fmt.Printf("Error in SubscribeTopic\n")
+					log.Printf(buildLogMessage(ERROR, fmt.Sprintf("Error in SubscribeTopic", toSubTopic), err.Error()))
 					atLeastOneBadTopic = true
 					topicResult[toSubTopic] = TopicResult{"BigError", err.Error()}
 					continue
 				}
+				log.Printf(buildLogMessage(OK, fmt.Sprintf("Subscribed to topic '%s'", toSubTopic), ""))
 				topicResult[toSubTopic] = TopicResult{"Fine", "Subscribed to the topic"}
 			} else if !isSubscribed {
 				// SUBSCRIBE
 				if token := serverState.mqttClient.Subscribe(toSubTopic, 0, nil); token.Wait() && token.Error() != nil {
-					fmt.Printf("ERROR: Subscribtion to topic %s failed!\n", toSubTopic)
+					log.Printf(buildLogMessage(ERROR, fmt.Sprintf("ERROR: Subscription to topic %s failed!", toSubTopic), token.Error().Error()))
 					topicResult[toSubTopic] = TopicResult{"BigError", err.Error()}
 					continue
 				}
 				// INSERT TO USERTOPICSUBSCRIBED
 				err := database.SubscribeTopic(serverState.con, subscribeTopics.BrokerUserIDs.BrokerId, subscribeTopics.BrokerUserIDs.UserId, knownTopicId)
 				if err != nil {
-					fmt.Printf("Error in SubscribeTopic\n")
+					log.Printf(buildLogMessage(ERROR, fmt.Sprintf("Error in SubscribeTopic", toSubTopic), err.Error()))
 					atLeastOneBadTopic = true
 					topicResult[toSubTopic] = TopicResult{"BigError", err.Error()}
 					continue
 				}
+				log.Printf(buildLogMessage(OK, fmt.Sprintf("Subscribed to topic '%s'", toSubTopic), ""))
 				topicResult[toSubTopic] = TopicResult{"Fine", "Subscribed to the topic"}
 			} else {
 				// WHAT
 				atLeastOneBadTopic = true
+				log.Printf(buildLogMessage(WARN, fmt.Sprintf("Topic '%s' is subscribed", toSubTopic), ""))
 				topicResult[toSubTopic] = TopicResult{"What", "The topic is already subscribed"}
 			}
 		}
 
 		if atLeastOneBadTopic {
+			log.Printf(buildLogMessage(WARN, "At least one Topic at subscribing was bad", ""))
 			return c.Status(fiber.StatusMultiStatus).JSON(fiber.Map{
 				"result": topicResult,
 			})
 		}
 
+		log.Printf(buildLogMessage(OK, "All topics are fine at subscribing", ""))
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"result": topicResult,
 		})

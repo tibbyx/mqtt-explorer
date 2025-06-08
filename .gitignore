@@ -1,6 +1,7 @@
 # server
 server/main
 server/mqtt-client-database.db
+server/log.txt
 
 # main
 main/main.go~
