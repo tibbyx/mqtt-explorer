@@ -15,7 +15,15 @@ export function useConnection() {
                 credentials
             );
             console.log("The connection was super duper!" + response);
+
+            // @ts-ignore
+            const {userId, brokerId} = response
+
+            localStorage.setItem("userId", userId)
+            localStorage.setItem("brokerId", brokerId)
+
             return response;
+
         } catch (err) {
             const errorObj = err instanceof Error ? err : new Error(String(err));
             setError(errorObj);

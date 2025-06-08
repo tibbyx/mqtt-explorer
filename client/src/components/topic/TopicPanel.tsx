@@ -5,40 +5,36 @@ import {Button} from "@/components/ui/button.tsx";
 import {MessageSquare, Plus} from "lucide-react";
 import {ScrollArea} from "../ui/scroll-area";
 import type {Topic} from "@/lib/types.ts";
-import {ChevronDown} from "lucide-react";
 import {useTopics} from "@/api/hooks/useTopics";
 import {useSubscribeTopics} from "@/api/hooks/useSubscribeTopic.ts";
 
 interface TopicPanelProps {
-    topics: Topic[];
     selectedTopic: Topic | null;
     onSelectTopic: (topic: any) => void;
-    onCreateTopic: (name: string) => void;
-    onDeleteTopic: (id: string) => void;
-    onRenameTopic: (id: string, newName: string) => void;
     onSubscribe: (id: string) => void;
     onUnsubscribe: (id: string) => void;
     isConnected: boolean;
+    searchTerm: string;
 }
 
 export default function TopicPanel({
                                        selectedTopic,
                                        onSelectTopic,
-                                       onCreateTopic,
-                                       onDeleteTopic,
-                                       onRenameTopic,
                                        isConnected,
+                                       searchTerm,
                                    }: TopicPanelProps) {
+    const TOPIC_CHECK_DELAY = 200;
     const [isCreating, setIsCreating] = useState(false);
     const [newTopicName, setNewTopicName] = useState("");
     const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
     const [editingName, setEditingName] = useState("");
-    const [showTopics, setShowTopics] = useState(true);
 
     const {fetchTopics, topics, addTopic, error, isLoading} = useTopics();
     const {
         subscribeToTopics,
         isLoading: isSubscribing,
+        error: subscribeError,
+        clearError: clearSubscribeError,
     } = useSubscribeTopics();
 
     useEffect(() => {
@@ -48,37 +44,61 @@ export default function TopicPanel({
         console.log("Fetched Topics: ", topics);
     }, [fetchTopics]);
 
-    const handleCreateSubmit = async (e: React.FormEvent) => {
+    const handleCreateSubmit = async (e: React.FormEvent): Promise<boolean> => {
         e.preventDefault();
         const trimmed = newTopicName.trim();
-        if (!trimmed) return;
-
-        console.log("Before submit - isCreating:", isCreating); // Debug
-
+        if (!trimmed) return false;
+        clearSubscribeError();
         try {
-            const response = await subscribeToTopics([trimmed]);
-            const result = response.result[trimmed];
+            const result = await subscribeToTopics([trimmed]);
+            const topicResult = result.results.find(r => r.topic === trimmed);
 
-            if (result.status === "Fine") {
-                const newTopic: Topic = {
-                    id: trimmed,
-                    name: trimmed,
-                    subscribed: true,
-                };
-
-                addTopic(newTopic);
-                onCreateTopic(trimmed);
-
-                console.log("Setting isCreating to false"); // Debug
-                setNewTopicName("");
-                setIsCreating(false);
-
-                console.log("After submit - isCreating should be false"); // Debug
-            } else {
-                console.error("Failed to create topic:", result.message);
+            if (topicResult?.success) {
+                return handleSuccessfulSubscription(trimmed);
             }
         } catch (error) {
-            console.error("Error creating topic:", error);
+            console.error("Subscription failed:", error);
+        }
+        return await checkTopicCreationWithFallback(trimmed);
+    };
+
+    const handleSuccessfulSubscription = (topicName: string): boolean => {
+        console.log("Topic created and subscribed successfully!");
+
+        const brokerId = localStorage.getItem('brokerId') || '';
+        const userId = localStorage.getItem('userId') || '';
+        const newTopic: Topic = {
+            Id: topicName,
+            Topic: topicName,
+            BrokerId: brokerId,
+            UserId: userId,
+            CreationDate: new Date().toISOString(),
+        };
+        addTopic(newTopic);
+        setNewTopicName("");
+        fetchTopics().catch(console.error);
+        return true;
+    };
+
+    const checkTopicCreationWithFallback = async (
+        topicName: string
+    ): Promise<boolean> => {
+        try {
+            await fetchTopics();
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    const wasCreated = topics.some(topic =>
+                        topic.Topic.toLowerCase() === topicName.toLowerCase()
+                    );
+                    if (wasCreated) {
+                        setNewTopicName("");
+                    }
+                    resolve(wasCreated);
+                }, TOPIC_CHECK_DELAY);
+            });
+        } catch (error) {
+            console.error("Failed to refresh topics:", error);
+            return false;
         }
     };
 
@@ -91,33 +111,19 @@ export default function TopicPanel({
 
     const handleTopicSelect = (topic: Topic) => {
         // If clicking the already selected topic, deselect it
-        if (selectedTopic?.id === topic.id) {
+        if (selectedTopic?.Id === topic.Id) {
             handleClearTopic();
         } else {
             onSelectTopic(topic);
             const url = new URL(window.location.href);
-            url.searchParams.set("topic", topic.name);
+            url.searchParams.set("topic", topic.Topic);
             window.history.pushState({}, "", url.toString());
         }
     };
 
-    const handleEditSubmit = (id: string) => {
-        const trimmed = editingName.trim();
-        if (trimmed) {
-            onRenameTopic(id, trimmed);
-        }
-        setEditingTopicId(null);
-        setEditingName("");
-    };
-
     const startEditing = (topic: Topic) => {
-        setEditingTopicId(topic.id);
-        setEditingName(topic.name);
-    };
-
-    const cancelEditing = () => {
-        setEditingTopicId(null);
-        setEditingName("");
+        setEditingTopicId(topic.Id);
+        setEditingName(topic.Topic);
     };
 
     const handleRetry = () => {
@@ -126,6 +132,21 @@ export default function TopicPanel({
         });
         console.log("Refetched Topics: ", topics);
     };
+
+    const handleCreateCancel = () => {
+        setIsCreating(false);
+        setNewTopicName("");
+        clearSubscribeError();
+    };
+
+    const filteredTopics = React.useMemo(() => {
+        if (!searchTerm.trim()) {
+            return topics;
+        }
+        return topics.filter(topic =>
+            topic.Topic.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [topics, searchTerm]);
 
     const renderTopicsContent = () => {
         if (isLoading) {
@@ -178,7 +199,7 @@ export default function TopicPanel({
             );
         }
 
-        if (topics.length === 0) {
+        if (!Array.isArray(filteredTopics) || filteredTopics.length === 0) {
             return (
                 <div className="p-2">
                     <div className="text-center py-8">
@@ -194,19 +215,16 @@ export default function TopicPanel({
         return (
             <div className="p-2">
                 <ul className="space-y-1">
-                    {topics.map((topic) => (
+                    {filteredTopics.map((topic) => (
                         <TopicItem
-                            key={topic.id}
+                            key={topic.Id}
                             topic={topic}
-                            isEditing={editingTopicId === topic.id}
+                            isEditing={editingTopicId === topic.Id}
                             editingName={editingName}
-                            selected={selectedTopic?.id === topic.id}
+                            selected={selectedTopic?.Id === topic.Id}
                             onSelect={() => handleTopicSelect(topic)}
                             onStartEditing={startEditing}
-                            onDelete={() => onDeleteTopic(topic.id)}
                             onEditNameChange={(e) => setEditingName(e.target.value)}
-                            onSubmitEdit={() => handleEditSubmit(topic.id)}
-                            onCancelEdit={cancelEditing}
                         />
                     ))}
                 </ul>
@@ -215,52 +233,52 @@ export default function TopicPanel({
     };
 
     return (
-        <div className="w-100 border-r border-t h-full">
-            <div className="p-4 h-16 border-b flex items-center justify-between"></div>
+        <div className="w-100 border-r border-t h-full flex flex-col">
+            <div className="p-4 h-16 border-b flex items-center justify-between flex-shrink-0"></div>
             {isConnected && (
                 <div
-                    className="p-4 h-16 flex items-center justify-between cursor-pointer transition bg-[var(--background)] border-b border-[var(--border)]"
-                    onClick={() => setShowTopics((prev) => !prev)}
-                >
+                    className="p-4 h-16 flex items-center justify-between bg-[var(--background)] border-b border-[var(--border)] flex-shrink-0">
                     <h2 className="dark:text-gray-200 flex items-center">
                         Topics
                         {isLoading && (
                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-500 ml-2"></div>
                         )}
                     </h2>
-                    {!showTopics && <ChevronDown className="w-4 h-4 ml-1"/>}
-                    {showTopics && (
-                        <Button
-                            size="sm"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setIsCreating(true);
-                                setNewTopicName("");
-                            }}
-                            disabled={isLoading || !!error}
-                        >
-                            <Plus className="h-4 w-4 mr-1"/>
-                            New Topic
-                        </Button>
-                    )}
+                    <Button
+                        size="sm"
+                        onClick={() => {
+                            setIsCreating(true);
+                            setNewTopicName("");
+                            clearSubscribeError();
+                        }}
+                        disabled={isLoading || !!error}
+                    >
+                        <Plus className="h-4 w-4 mr-1"/>
+                        New Topic
+                    </Button>
                 </div>
             )}
-            {isConnected && showTopics && (
-                <>
+            {isConnected && (
+                <div className="flex-1 flex flex-col overflow-hidden">
                     {isCreating && !isLoading && !error && (
-                        <CreateTopicForm
-                            newTopicName={newTopicName}
-                            onNewTopicNameChange={(e) => setNewTopicName(e.target.value)}
-                            onSubmit={handleCreateSubmit}
-                            onCancel={() => {
-                                setIsCreating(false);
-                                setNewTopicName("");
-                            }}
-                            isSubmitting={isSubscribing}
-                        />
+                        <div className="flex-shrink-0">
+                            <CreateTopicForm
+                                newTopicName={newTopicName}
+                                onNewTopicNameChange={(e) => setNewTopicName(e.target.value)}
+                                onSubmit={handleCreateSubmit}
+                                onCancel={handleCreateCancel}
+                                isSubmitting={isSubscribing}
+                                error={subscribeError}
+                                onClearError={clearSubscribeError}
+                            />
+                        </div>
                     )}
-                    <ScrollArea className="flex-1">{renderTopicsContent()}</ScrollArea>
-                </>
+                    <div className="flex-1 overflow-hidden">
+                        <ScrollArea className="h-full">
+                            {renderTopicsContent()}
+                        </ScrollArea>
+                    </div>
+                </div>
             )}
         </div>
     );

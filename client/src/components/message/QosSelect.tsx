@@ -33,8 +33,8 @@ export function QosSelect({
             <SelectContent>
                 {showAnyOption && <SelectItem value="any">Any QoS</SelectItem>}
                 <SelectItem value="0">QoS 0</SelectItem>
-                <SelectItem value="1">QoS 1</SelectItem>
-                <SelectItem value="2">QoS 2</SelectItem>
+                <SelectItem value="1" disabled>QoS 1</SelectItem>
+                <SelectItem value="2" disabled>QoS 2</SelectItem>
             </SelectContent>
         </Select>
     );

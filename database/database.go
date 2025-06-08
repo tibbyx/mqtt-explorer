@@ -688,6 +688,66 @@ func SelectTopicsByBrokerId(con *sql.DB, brokerId int) ([]SelectTopic, error) {
 	return topicList, nil
 }
 
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-05-29     | Polariusz | Created |
+//
+// # Struct to Table Mapping
+//
+// | Struct SelectTopic     | Table Topic           | Table UserTopicSubscribed |
+// +------------------------+-----------------------+---------------------------+
+// | Id int                 | ID INTEGER            |                           |
+// | BrokerId int           | BrokerId INTEGER      |                           |
+// | Topic string           | Topic TEXT            |                           |
+// | CreationDate time.Time | CreationDate DATETIME |                           |
+// | Subscribed bool        |                       | <If Exists>               |
+//
+// # Used in
+// - SelectTopicsByBrokerId()
+//
+// # Author
+// - Polariusz
+type SelectTopicSubscribed struct {
+	Id int
+	BrokerId int
+	Topic string
+	CreationDate time.Time
+	Subscribed bool
+}
+
+func SelectTopicsByBrokerIdAndUserId(con *sql.DB, brokerId int, userId int) ([]SelectTopicSubscribed, error) {
+	var topicList []SelectTopicSubscribed
+
+	stmt, err := con.Prepare(`
+		SELECT
+			t.Id,
+			t.BrokerId,
+			t.Topic, t.CreationDate,
+			IFNULL((SELECT 'TRUE' FROM UserTopicSubscribed uts WHERE uts.BrokerId = ? AND uts.TopicId = t.ID AND uts.UserId = ?),'FALSE') AS Subscribed
+		FROM TOPIC t
+		WHERE t.BrokerId = ?
+	`)
+
+	if err != nil {
+		return nil, fmt.Errorf("Error while preparing the statement.\nErr: %s\n", err)
+	}
+	defer stmt.Close()
+
+	rows, err := stmt.Query(brokerId, userId, brokerId)
+	if err != nil {
+		return nil, fmt.Errorf("Error while quering the statement.\nErr: %s\n", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var topic SelectTopicSubscribed
+		rows.Scan(&topic.Id, &topic.BrokerId, &topic.Topic, &topic.CreationDate, &topic.Subscribed)
+		topicList = append(topicList, topic)
+	}
+
+	return topicList, nil
+}
+
 // | Date of change | By        | Comment        |
 // +----------------+-----------+----------------+
 // | 2025-05-29     | Polariusz | Created        |

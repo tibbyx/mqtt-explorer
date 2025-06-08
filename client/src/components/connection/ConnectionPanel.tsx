@@ -10,6 +10,7 @@ export function ConnectionPanel({onToggleConnect}: { onToggleConnect?: () => voi
     const [host, setHost] = useState("localhost");
     const [port, setPort] = useState(1883);
     const [clientId, setClientId] = useState(`Bob-${Math.random().toString(16).substring(2, 4)}`);
+    const [selectedPreset, setSelectedPreset] = useState<string>("");
 
     const {connect, error} = useConnection()
 
@@ -20,10 +21,17 @@ export function ConnectionPanel({onToggleConnect}: { onToggleConnect?: () => voi
     ];
 
     const handlePresetSelect = (presetName: string) => {
-        const preset = presets.find(p => p.name === presetName);
-        if (preset) {
-            setHost(preset.host);
-            setPort(preset.port);
+        if (presetName === "none") {
+            setHost("localhost");
+            setPort(1883);
+            setSelectedPreset("");
+        } else {
+            const preset = presets.find(p => p.name === presetName);
+            if (preset) {
+                setHost(preset.host);
+                setPort(preset.port);
+                setSelectedPreset(presetName);
+            }
         }
     };
 
@@ -59,11 +67,15 @@ export function ConnectionPanel({onToggleConnect}: { onToggleConnect?: () => voi
                             <Label htmlFor="preset" className="text-sm font-medium">
                                 Presets
                             </Label>
-                            <Select onValueChange={handlePresetSelect}>
+                            <Select
+                                value={selectedPreset}
+                                onValueChange={handlePresetSelect}
+                            >
                                 <SelectTrigger id="preset" className="mt-1">
                                     <SelectValue placeholder="Select a Preset Broker"/>
                                 </SelectTrigger>
                                 <SelectContent>
+                                    <SelectItem value="none">Custom</SelectItem>
                                     {presets.map((preset) => (
                                         <SelectItem key={preset.name} value={preset.name}>
                                             {preset.name}
