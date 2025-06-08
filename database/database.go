@@ -993,7 +993,7 @@ func UnsubscribeTopic(con *sql.DB, brokerId int, userId int, topicId int) error 
 		AND
 			UserId = ?
 		AND
-			TopicId = ?
+			ID = ?
 	`)
 	if err != nil {
 		return fmt.Errorf("Skill issues\nErr: %s\n", err)

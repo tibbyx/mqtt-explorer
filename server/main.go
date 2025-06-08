@@ -663,6 +663,10 @@ func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 						topicResult[toUnsubTopic] = TopicResult{"BigError", err.Error()}
 						continue
 					}
+					if token := serverState.mqttClient.Unsubscribe("go-mqtt/sample"); token.Wait() && token.Error() != nil {
+						topicResult[toUnsubTopic] = TopicResult{"BigError", token.Error().Error()}
+						continue
+					}
 					topicResult[toUnsubTopic] = TopicResult{"Fine", "Unsubscribed to the topic"}
 				}
 			}
