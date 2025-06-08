@@ -11,6 +11,7 @@ import (
 	"github.com/eclipse/paho.mqtt.golang"
 	"time"
 	"strconv"
+	"os/exec"
 )
 
 // | Date of change | By        | Comment |
@@ -150,6 +151,12 @@ func main() {
 	if err := database.SetupDatabase(con); err != nil {
 		fmt.Printf("WARN: Issue with setting db up!\nErr:%s\n", err)
 	}
+
+	// Browser automatisch öffnen (nur Windows)
+	go func() {
+		url := "http://localhost:3000"
+		exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	}()
 
 	server := fiber.New()
 
