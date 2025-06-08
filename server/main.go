@@ -375,7 +375,7 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 				log.Printf(buildLogMessage(ERROR, fmt.Sprintf("Error while subscribing to %s", topicToSub), err.Error()))
 				continue
 			}
-			log.Printf(buildLogMessage(OK, fmt.Sprintf("Subscribed to topic: '%s' automatically", topicToSub), ))
+			log.Printf(buildLogMessage(OK, fmt.Sprintf("Subscribed to topic: '%s' automatically", topicToSub), ""))
 		}
 
 		log.Printf(buildLogMessage(OK, fmt.Sprintf("Connected to Broker %s:%s", userCreds.Ip, userCreds.Port), ""))
@@ -648,7 +648,7 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 			} else {
 				// WHAT
 				atLeastOneBadTopic = true
-				log.Printf(buildLogMessage(WARN, fmt.Sprintf("Topic '%s' is subscribed", toSubTopic), ""))
+				log.Printf(buildLogMessage(CERR, fmt.Sprintf("Topic '%s' is already subscribed", toSubTopic), ""))
 				topicResult[toSubTopic] = TopicResult{"What", "The topic is already subscribed"}
 			}
 		}
@@ -706,7 +706,9 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 // - Polariusz
 func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		log.Printf(buildLogMessage(OK, "Received /topic/unsubscribe", ""))
 		if serverState.mqttClient == nil || !serverState.mqttClient.IsConnected() {
+			log.Printf(buildLogMessage(CERR, "Client is not authenticated", ""))
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"Unauthorized": "The MQTT-Client is not connected with the Broker.",
 			})
@@ -715,12 +717,14 @@ func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 		var unsubscribeTopics TopicsWrapper
 
 		if err := c.BodyParser(&unsubscribeTopics); err != nil {
+			log.Printf(buildLogMessage(CERR, "Client's JSON is not valid", ""))
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"badJson": BADJSON,
 			})
 		}
 
 		if unsubscribeTopics.BrokerUserIDs.BrokerId <= 0 || unsubscribeTopics.BrokerUserIDs.UserId <= 0 {
+			log.Printf(buildLogMessage(CERR, "Client's JSON does not have valid arguments", ""))
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"terribleJson": "Arguments are not valid",
 			})
@@ -731,6 +735,7 @@ func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 
 		dbSubscribedTopicList, err := database.SelectSubscribedTopics(serverState.con, unsubscribeTopics.BrokerUserIDs.BrokerId, unsubscribeTopics.BrokerUserIDs.UserId)
 		if err != nil {
+			log.Printf(buildLogMessage(ERROR, "Error while selecting topics from the database", err.Error()))
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"InternalServerError" : "Error while selecting topics from database",
 				"Error" : err.Error(),
@@ -744,28 +749,35 @@ func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 					isSubscribed = true
 					if err := database.UnsubscribeTopic(serverState.con, unsubscribeTopics.BrokerUserIDs.BrokerId, unsubscribeTopics.BrokerUserIDs.UserId, subTopic.TopicId); err != nil {
 						atLeastOneBadTopic = true
+						log.Printf(buildLogMessage(ERROR, fmt.Sprintf("ERROR: database.UnsubscribeTopic(%s) failed!", toUnsubTopic), err.Error()))
 						topicResult[toUnsubTopic] = TopicResult{"BigError", err.Error()}
 						continue
 					}
-					if token := serverState.mqttClient.Unsubscribe("go-mqtt/sample"); token.Wait() && token.Error() != nil {
+					if token := serverState.mqttClient.Unsubscribe(toUnsubTopic); token.Wait() && token.Error() != nil {
+						atLeastOneBadTopic = true
+						log.Printf(buildLogMessage(ERROR, fmt.Sprintf("ERROR: mqttClient.Unsubscribe(%s) failed!", toUnsubTopic), token.Error().Error()))
 						topicResult[toUnsubTopic] = TopicResult{"BigError", token.Error().Error()}
 						continue
 					}
+					log.Printf(buildLogMessage(OK, fmt.Sprintf("Unsubscribed the topic '%s'", toUnsubTopic), ""))
 					topicResult[toUnsubTopic] = TopicResult{"Fine", "Unsubscribed to the topic"}
 				}
 			}
 			if !isSubscribed {
 				atLeastOneBadTopic = true
+				log.Printf(buildLogMessage(CERR, fmt.Sprintf("Topic '%s' is not subscribed", toUnsubTopic), ""))
 				topicResult[toUnsubTopic] = TopicResult{"What", "The topic is not subscribed"}
 			}
 		}
 
 		if atLeastOneBadTopic {
+			log.Printf(buildLogMessage(WARN, "At least one Topic at unsubscribing was bad", ""))
 			return c.Status(fiber.StatusMultiStatus).JSON(fiber.Map{
 				"result": topicResult,
 			})
 		}
 
+		log.Printf(buildLogMessage(OK, "All topics are fine at unsubscribing", ""))
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"result": topicResult,
 		})
