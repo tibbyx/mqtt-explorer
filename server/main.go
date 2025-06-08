@@ -192,6 +192,7 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Get("/topic/new-messages", GetTopicNewMessagesHandler(serverState))
 	server.Get("/ping", GetPingHandler(serverState))
 	server.Post("/topic/all-known", GetTopicAllKnownHandler(serverState))
+	server.Post("/topic/all-known-subscribed", PostTopicAllKnownSubscribedHandler(serverState))
 	server.Post("/topic/favourites/mark", PostTopicFavouritesMark(serverState))
 	server.Post("/topic/favourites/unmark", PostTopicFavouritesUnmark(serverState))
 	server.Get("/topic/favourites", GetTopicFavourites(serverState))
@@ -392,7 +393,7 @@ func validateCredentials(errorMessage *string, userCreds *MqttCredentials) int {
 // | 2025-06-05     | Polariusz | Added BrokerUser |
 //
 // # Structure:
-// - {"BrokerUserIds":{"BrokerId":<B>, "UserId":<U>},"Topics":[<T>]}
+// - {"BrokerUserIDs":{"BrokerId":<B>, "UserId":<U>},"Topics":[<T>]}
 //   - <B> : The ID of the Broker ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
 //   - <U> : The ID of the User ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
 //   - <T> : String array of topics
@@ -527,7 +528,7 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 			if !isKnown {
 				// SUBSCRIBE
 				if token := serverState.mqttClient.Subscribe(toSubTopic, 0, nil); token.Wait() && token.Error() != nil {
-					fmt.Printf("ERROR: Subscribtion to topic %s failed!\n", toSubTopic)
+					fmt.Printf("ERROR: Subscription to topic %s failed!\n", toSubTopic)
 					continue
 				}
 				// INSERT TO TOPIC
@@ -633,7 +634,11 @@ func PostTopicUnsubscribeHandler(serverState *ServerState) fiber.Handler {
 			})
 		}
 
-		// TODO: Validate topics (if they are empty)
+		if unsubscribeTopics.BrokerUserIDs.BrokerId <= 0 || unsubscribeTopics.BrokerUserIDs.UserId <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"terribleJson": "Arguments are not valid",
+			})
+		}
 
 		topicResult := make(map[string]TopicResult)
 		atLeastOneBadTopic := false
@@ -723,6 +728,12 @@ func GetTopicSubscribedHandler(serverState *ServerState) fiber.Handler {
 			})
 		}
 
+		if brokerUser.BrokerId <= 0 || brokerUser.UserId <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"terribleJson": "Arguments are not valid",
+			})
+		}
+
 		topicList, err := database.SelectSubscribedTopics(serverState.con, brokerUser.BrokerId, brokerUser.UserId)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -744,7 +755,7 @@ func GetTopicSubscribedHandler(serverState *ServerState) fiber.Handler {
 // | 2025-06-06     | Polariusz | Added BrokerUser |
 //
 // # Structure:
-// - {"BrokerUserIds":{"BrokerId":<B>,"UserId":<U>},"Topic":<T>,"Message":"<M>"}
+// - {"BrokerUserIDs":{"BrokerId":<B>,"UserId":<U>},"Topic":<T>,"Message":"<M>"}
 //   - <T>: Topic
 //   - <M>: Message
 //
@@ -754,7 +765,7 @@ func GetTopicSubscribedHandler(serverState *ServerState) fiber.Handler {
 // # Author
 // - Polariusz
 type MessageWrapper struct {
-	BrokerUserIds BrokerUser
+	BrokerUserIDs BrokerUser
 	Topic string // TODO: This could be converted to a string array if you wish for the publich messages method to send the same message to multiple topics.
 	Message string
 }
@@ -803,7 +814,13 @@ func PostTopicSendMessageHandler(serverState *ServerState) fiber.Handler {
 			})
 		}
 
-		user, err := database.SelectUserById(serverState.con, messageWrapper.BrokerUserIds.UserId)
+		if messageWrapper.BrokerUserIDs.BrokerId <= 0 || messageWrapper.BrokerUserIDs.UserId <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"terribleJson": "Arguments are not valid",
+			})
+		}
+
+		user, err := database.SelectUserById(serverState.con, messageWrapper.BrokerUserIDs.UserId)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"Internal Server Error": "Error while selecting User by ID",
@@ -958,7 +975,7 @@ func createMessageHandler(serverState *ServerState, brokerId int) mqtt.MessageHa
 // | 2025-06-06     | Polariusz | Created |
 //
 // # Structure:
-// - {"BrokerUserIds":{"BrokerId":<B>, "UserId":<U>},"Topics":"<T>","Index":<I>}
+// - {"BrokerUserIDs":{"BrokerId":<B>, "UserId":<U>},"Topics":"<T>","Index":<I>}
 //   - <B> : The ID of the Broker ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
 //   - <U> : The ID of the User ROW matched from the BrokerId from PostCredentialsHandler()'s brokerId
 //   - <T> : The Topic
@@ -1019,7 +1036,7 @@ func GetTopicMessagesHandler(serverState *ServerState) fiber.Handler {
 				"badJson": BADJSON,
 			})
 		}
-		if topicWrapper.BrokerUserIDs.BrokerId < 0 || topicWrapper.BrokerUserIDs.UserId < 0 || topicWrapper.Topic == "" {
+		if topicWrapper.BrokerUserIDs.BrokerId <= 0 || topicWrapper.BrokerUserIDs.UserId <= 0 || topicWrapper.Topic == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"terribleJson": "The arguments in the json structure are missing",
 			})
@@ -1192,7 +1209,7 @@ func GetTopicNewMessagesHandler(serverState *ServerState) fiber.Handler {
 // - Handler
 //
 // # Description
-// - The method shall return a list of all previously subscribed Topics in a JSON format
+// - The method shall return a list known topics.
 // - The method shall return a 200 (Ok) with the list if user is authenticated
 // - The method shall return a 401 (Unauthorized) if the user is not authenticated
 //
@@ -1229,7 +1246,77 @@ func GetTopicAllKnownHandler(serverState *ServerState) fiber.Handler {
 			})
 		}
 
+		if brokerUser.BrokerId <= 0 || brokerUser.UserId <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"terribleJson": "Arguments are not valid",
+			})
+		}
+
 		topicList, err := database.SelectTopicsByBrokerId(serverState.con, brokerUser.BrokerId)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"InternalServerError": err.Error(),
+			})
+		}
+
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"Topics": topicList,
+		})
+	}
+}
+
+// | Date of change | By        | Comment |
+// +----------------+-----------+---------+
+// | 2025-06-08     | Polariusz | Created |
+//
+// # Method-Type
+// - Handler
+//
+// # Description
+// - The method shall return a list of all known topics and if these are subscribed or not
+// - The method shall return a 200 (Ok) with the list if user is authenticated
+// - The method shall return a 401 (Unauthorized) if the user is not authenticated
+//
+// # Usage
+// - Call declared by the routing method addRoutes() URL with the GET-Method.
+// - The client shall post a JSON that matches the structure of `BrokerUser`.
+//
+// # Returns
+// - 200 (Ok): JSON
+//   - {"Topics":[<TOPIC-N>]}
+// - 400 (Bad Request): JSON
+//   - {"badJson":`const BADJSON`}
+// - 401 (Unauthorized): JSON
+//   - {"Unauthorized":"The MQTT-Client is not connected to any brokers"}
+// - 500 (Internal Server Error): JSON
+//   - {"InternalServerError":"<SQL-ERROR>"}
+//
+// # Author
+// - Polariusz
+func PostTopicAllKnownSubscribedHandler(serverState *ServerState) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if serverState.mqttClient == nil || !serverState.mqttClient.IsConnected() {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				// TODO: Explain the message a bit more
+				"Unauthorized": "The MQTT-Client is not connected to any brokers",
+			})
+		}
+
+		var brokerUser BrokerUser
+
+		if err := c.BodyParser(&brokerUser); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"badJson": BADJSON,
+			})
+		}
+
+		if brokerUser.BrokerId <= 0 || brokerUser.UserId <= 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"terribleJson": "Arguments are not valid",
+			})
+		}
+
+		topicList, err := database.SelectTopicsByBrokerIdAndUserId(serverState.con, brokerUser.BrokerId, brokerUser.UserId)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"InternalServerError": err.Error(),
@@ -1327,7 +1414,7 @@ func PostTopicFavouritesMark(serverState *ServerState) fiber.Handler {
 			})
 		}
 
-		if markTopics.BrokerUserIDs.BrokerId < 0 || markTopics.BrokerUserIDs.UserId < 0 {
+		if markTopics.BrokerUserIDs.BrokerId <= 0 || markTopics.BrokerUserIDs.UserId <= 0 {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"terribleJson": "Arguments are not valid",
 			})
@@ -1443,7 +1530,7 @@ func PostTopicFavouritesUnmark(serverState *ServerState) fiber.Handler {
 			})
 		}
 
-		if unmarkTopics.BrokerUserIDs.BrokerId < 0 || unmarkTopics.BrokerUserIDs.UserId < 0 {
+		if unmarkTopics.BrokerUserIDs.BrokerId <= 0 || unmarkTopics.BrokerUserIDs.UserId <= 0 {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"terribleJson": "Arguments are not valid",
 			})
@@ -1535,7 +1622,7 @@ func GetTopicFavourites(serverState *ServerState) fiber.Handler {
 			})
 		}
 
-		if brokerUser.BrokerId < 0 || brokerUser.UserId < 0 {
+		if brokerUser.BrokerId <= 0 || brokerUser.UserId <= 0 {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"terribleJson": "Arguments are not valid",
 			})

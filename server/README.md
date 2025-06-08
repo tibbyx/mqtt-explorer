@@ -345,14 +345,61 @@ curl -X GET --header "Content-Type: Application/Json" --data '{"BrokerId":<BROKE
 #### If the client is not authenticated yet, the server will return a 401 (Unauthorized) with a JSON:
 ```javascript
 {
-  "Message": "Authenticate yourself first!"
+  "Unauthorized": "The MQTT-Client is not connected to any brokers"
+}
+```
+
+#### If the JSON package is valid, but the arguments aren't, the server will return a 401 (Unauthorized) with a JSON:
+```javascript
+{
+  "terribleJson": "Arguments are not valid"
+}
+```
+
+#### If the server has encountered a database error, it will return a 500 (Internal Server Error) with a JSON:
+```javascript
+{
+  "InternalServerError": "<SQL-Error>"
 }
 ```
 
 #### If everything went well, the server will return a 200 (OK) with a JSON:
 ```javascript
 {
-  "Topics" : ["<TOPIC-1>", "<TOPIC-2>", "<TOPIC-N>"]
+  "Topics" : [<SelectTopic-1>, <SelectTopic-2>, <SelectTopic-N>]
+}
+```
+
+### To get all known topics and if these are subscribed or not:
+```bash
+curl -X POST --header "Content-Type: Application/Json" --data '{"BrokerId":<BROKER-ID>,"UserId":<USER-ID>}' localhost:3000/topic/all-known-subscribed
+```
+
+#### If the client is not authenticated yet, the server will return a 401 (Unauthorized) with a JSON:
+```javascript
+{
+  "Unauthorized": "The MQTT-Client is not connected to any brokers"
+}
+```
+
+#### If the JSON package is valid, but the arguments aren't, the server will return a 401 (Unauthorized) with a JSON:
+```javascript
+{
+  "terribleJson": "Arguments are not valid"
+}
+```
+
+#### If the server has encountered a database error, it will return a 500 (Internal Server Error) with a JSON:
+```javascript
+{
+  "InternalServerError": "<SQL-Error>"
+}
+```
+
+#### If everything went well, the server will return a 200 (OK) with a JSON:
+```javascript
+{
+  "Topics" : [<SelectTopicSubscribed-1>, <SelectTopicSubscribed-2>, <SelectTopicSubscribed-N>]
 }
 ```
 
