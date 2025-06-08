@@ -258,6 +258,11 @@ func PostCredentialsHandler(serverState *ServerState) fiber.Handler {
 			}
 		}
 
+		// It it is connected, disconnect first!
+		if serverState.mqttClient != nil && serverState.mqttClient.IsConnected() {
+			serverState.mqttClient.Disconnect(250)
+		}
+
 		// NOTE: I do this before to get the brokerId for the createMessageHandler.
 		// Skipping err, as this should be validated in the validation function.
 		port, _ := strconv.Atoi(userCreds.Port)
