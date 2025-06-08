@@ -9,7 +9,7 @@ import type {Credentials} from "@/lib/types.ts";
 export function ConnectionPanel({onToggleConnect}: { onToggleConnect?: () => void } = {}) {
     const [host, setHost] = useState("localhost");
     const [port, setPort] = useState(1883);
-    const [clientId, setClientId] = useState(`Bob-${Math.random().toString(16).substring(2, 4)}`);
+    const [clientId, setClientId] = useState("");
     const [selectedPreset, setSelectedPreset] = useState<string>("");
 
     const {connect, error} = useConnection()
@@ -41,6 +41,9 @@ export function ConnectionPanel({onToggleConnect}: { onToggleConnect?: () => voi
             port: port.toString(),
             clientId: clientId
         }
+        localStorage.setItem("ip", payload.ip);
+        localStorage.setItem("port", payload.port);
+
         try {
             const response = await connect(payload)
             console.log("Handle MQTT Connected:", response);

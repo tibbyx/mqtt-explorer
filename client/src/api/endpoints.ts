@@ -8,7 +8,7 @@ export const endpoints = {
     subscribeToTopic: "/topic/subscribe",
     unsubscribeToTopic: "/topic/unsubscribe",
     subscribedTopics: "/topic/subscribed",
-    getAllTopics: "/topic/all-known",
+    getAllTopics: "/topic/all-known-subscribed",
 
     // messages
     sendMessageToTopic: "/topic/send-message",

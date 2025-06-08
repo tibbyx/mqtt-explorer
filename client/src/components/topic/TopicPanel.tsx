@@ -73,6 +73,7 @@ export default function TopicPanel({
             BrokerId: brokerId,
             UserId: userId,
             CreationDate: new Date().toISOString(),
+            Subscribed: true
         };
         addTopic(newTopic);
         setNewTopicName("");
@@ -234,10 +235,10 @@ export default function TopicPanel({
 
     return (
         <div className="w-100 border-r border-t h-full flex flex-col">
-            <div className="p-4 h-16 border-b flex items-center justify-between flex-shrink-0"></div>
+            <div className="p-4 p-4 h-16 flex items-center justify-between flex-shrink-0"></div>
             {isConnected && (
                 <div
-                    className="p-4 h-16 flex items-center justify-between bg-[var(--background)] border-b border-[var(--border)] flex-shrink-0">
+                    className="p-4 h- flex items-center justify-between bg-[var(--background)] border-y border-[var(--border)] flex-shrink-0">
                     <h2 className="dark:text-gray-200 flex items-center">
                         Topics
                         {isLoading && (

@@ -6,6 +6,7 @@ export interface Topic {
     Id: string;
     Topic: string;
     CreationDate: string;
+    Subscribed: boolean
 }
 
 export interface Message {
@@ -14,6 +15,7 @@ export interface Message {
     payload: string
     qos: QoSLevel
     timestamp: string
+    ClientId: string
 }
 
 export interface Credentials {

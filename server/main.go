@@ -164,7 +164,7 @@ func main() {
 	addRoutes(server, &serverState)
 
 	// need to build ui via 'npm run build' in client first
-	server.Static("/", "../client/dist")
+	server.Static("/", "dist")
 	server.Listen(":3000")
 }
 

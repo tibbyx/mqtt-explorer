@@ -11,7 +11,7 @@ export const MessageItem = React.memo(function MessageItem({message}: { message:
                     variant="outline"
                     className={"flex items-center gap-1 font-medium"}
                 >
-                    QoS {message.qos}
+                    {message.ClientId}
                 </Badge>
                 <span className="text-xs">
                     {formatDistanceToNow(new Date(message.timestamp), {
