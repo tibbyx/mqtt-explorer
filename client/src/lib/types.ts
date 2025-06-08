@@ -1,9 +1,11 @@
 export type QoSLevel = 0 | 1 | 2
 
 export interface Topic {
-    id: string
-    name: string
-    subscribed: boolean
+    BrokerId: string;
+    UserId: string;
+    Id: string;
+    Topic: string;
+    CreationDate: string;
 }
 
 export interface Message {

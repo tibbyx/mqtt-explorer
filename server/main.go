@@ -154,7 +154,7 @@ func main() {
 	server := fiber.New()
 
 	server.Use(cors.New(cors.Config{
-        AllowOrigins: "http://localhost:5173",
+        AllowOrigins: "*",
         AllowHeaders: "Origin, Content-Type, Accept, Authorization",
     }))
 
@@ -164,7 +164,7 @@ func main() {
 	addRoutes(server, &serverState)
 
 	// need to build ui via 'npm run build' in client first
-	// server.Static("/", "../client/dist")
+	server.Static("/", "../client/dist")
 	server.Listen(":3000")
 }
 
@@ -188,10 +188,10 @@ func addRoutes(server *fiber.App, serverState *ServerState) {
 	server.Post("/topic/unsubscribe", PostTopicUnsubscribeHandler(serverState))
 	server.Get("/topic/subscribed", GetTopicSubscribedHandler(serverState))
 	server.Post("/topic/send-message", PostTopicSendMessageHandler(serverState))
-	server.Get("/topic/messages", GetTopicMessagesHandler(serverState))
+	server.Post("/topic/messages", GetTopicMessagesHandler(serverState))
 	server.Get("/topic/new-messages", GetTopicNewMessagesHandler(serverState))
 	server.Get("/ping", GetPingHandler(serverState))
-	server.Get("/topic/all-known", GetTopicAllKnownHandler(serverState))
+	server.Post("/topic/all-known", GetTopicAllKnownHandler(serverState))
 	server.Post("/topic/favourites/mark", PostTopicFavouritesMark(serverState))
 	server.Post("/topic/favourites/unmark", PostTopicFavouritesUnmark(serverState))
 	server.Get("/topic/favourites", GetTopicFavourites(serverState))
@@ -1063,6 +1063,10 @@ func GetTopicMessagesHandler(serverState *ServerState) fiber.Handler {
 				})
 			}
 		}
+
+        if messageList == nil {
+    		messageList = []database.SelectMessage{}
+    	}
 
 		return c.JSON(fiber.Map{
 			"topic": topicWrapper.Topic,

@@ -17,12 +17,12 @@ import {
 import {Avatar, AvatarFallback, AvatarImage} from "@/components/ui/avatar";
 
 interface HeaderProps {
-    onSearch: (query: string) => void;
     isConnected: boolean;
-    onToggleConnect: () => void;
+    onToggleConnect: () => void
+    onSearch: (value: string) => void;
 }
 
-export function Header({onSearch, isConnected, onToggleConnect}: HeaderProps) {
+export function Header({isConnected, onToggleConnect, onSearch}: HeaderProps) {
     const [searchValue, setSearchValue] = useState("");
 
     // Debounce search input

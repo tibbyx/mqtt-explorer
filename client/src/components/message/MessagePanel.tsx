@@ -5,11 +5,11 @@ import {MessageTopicHeader} from "./MessageTopicHeader.tsx";
 import {MessagesContainer} from "./MessageContainer";
 import {MessageComposer} from "./MessageComposer";
 import {useMessages} from "@/api/hooks/useMessages.ts";
+import {useSendMessage} from "@/api/hooks/useSendMessage.ts";
 
 export interface MessagePanelProps {
     topic: Topic | null;
     messages: Message[];
-    onPublish: (topic: string, payload: string, qos: QoSLevel) => void;
     onSubscribe?: (topicId: string) => void;
     onUnsubscribe?: (topicId: string) => void;
     isLoading?: boolean;
@@ -18,7 +18,6 @@ export interface MessagePanelProps {
 
 export function MessagePanel({
                                  topic,
-                                 onPublish,
                                  onSubscribe,
                                  onUnsubscribe,
                              }: MessagePanelProps) {
@@ -31,24 +30,26 @@ export function MessagePanel({
         refresh,
     } = useMessages();
 
+    const {
+        sendMessage,
+        isLoading: isSending,
+        error: sendError,
+        clearError: clearSendError,
+    } = useSendMessage();
+
     const [messageText, setMessageText] = useState("");
     const [publishQosLevel, setPublishQosLevel] = useState<QoSLevel>(0);
     const [filterQos, setFilterQos] = useState<QoSLevel | null>(null);
     const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-    // Start/stop watching when topic changes
     useEffect(() => {
         if (topic) {
-            startWatching(topic.name);
+            startWatching(topic.Topic);
         } else {
             stopWatching();
         }
-    }, [topic?.name, startWatching, stopWatching]);
-
-    useEffect(() => {
-        setIsSubscribed(topic?.subscribed ?? null);
-    }, [topic]);
+    }, [topic?.Topic, startWatching, stopWatching]);
 
     const filteredMessages = messages.filter(
         (message) => filterQos === null || message.qos === filterQos
@@ -61,26 +62,28 @@ export function MessagePanel({
         }
     }, [filteredMessages.length, filterQos]);
 
-    const handlePublish = (e: React.FormEvent) => {
+    // handlePublish to use the sendMessage hook
+    const handlePublish = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!topic || !messageText.trim()) return;
-
-        onPublish(topic.name, messageText.trim(), publishQosLevel);
-        setMessageText("");
-
-        // Manual refresh after publishing
-        setTimeout(() => refresh(), 100);
+        try {
+            clearSendError();
+            await sendMessage(topic.Topic, messageText.trim());
+            setMessageText("");
+            setTimeout(() => refresh(), 500);
+        } catch (error) {
+            console.error('Failed to send message:', error);
+        }
     };
 
     const handleSubscriptionToggle = () => {
         if (!topic) return;
-
         const newSubscriptionState = !isSubscribed;
         if (newSubscriptionState) {
-            onSubscribe?.(topic.id);
-            startWatching(topic.name);
+            onSubscribe?.(topic.Id);
+            startWatching(topic.Topic);
         } else {
-            onUnsubscribe?.(topic.id);
+            onUnsubscribe?.(topic.Id);
             stopWatching();
         }
         setIsSubscribed(newSubscriptionState);
@@ -96,7 +99,7 @@ export function MessagePanel({
     return (
         <div className="flex-1 flex flex-col h-full bg-gray-50 dark:bg-[var(--secondary-foreground)]">
             <MessageTopicHeader
-                topicName={topic.name}
+                topicName={topic.Topic}
                 isSubscribed={!!isSubscribed}
                 onSubscriptionToggle={handleSubscriptionToggle}
                 filterQos={filterQos}
@@ -107,7 +110,7 @@ export function MessagePanel({
                 ref={messagesContainerRef}
                 messages={filteredMessages}
                 isLoading={isLoading}
-                error={error}
+                error={error || sendError}
             />
             <MessageComposer
                 messageText={messageText}
@@ -115,6 +118,9 @@ export function MessagePanel({
                 qosLevel={publishQosLevel}
                 onQosChange={setPublishQosLevel}
                 onPublish={handlePublish}
+                isPublishing={isSending}
+                publishError={sendError}
+                onClearError={clearSendError}
             />
         </div>
     );

@@ -1,28 +1,52 @@
-// hooks/useMessages.ts
 import {useState, useCallback, useEffect, useRef} from 'react';
 import type {Message, QoSLevel} from '@/lib/types';
 import {apiClient} from '@/api/client';
 import {endpoints} from '@/api/endpoints';
 
-interface TopicMessagesResponse {
-    topic: string;
-    messages: string[];
+interface SelectMessage {
+    Id: number;
+    UserId: number;
+    ClientId: string;
+    TopicId: number;
+    BrokerId: number;
+    QoS: number;
+    Message: string;
+    CreationDate: string;
 }
 
-// Helper function to compare message arrays
+interface TopicMessagesResponse {
+    topic: string;
+    messages: SelectMessage[]
+}
+
+interface TopicMessagesRequest {
+    brokerUserIDs: {
+        brokerId: number;
+        userId: number;
+    };
+    topic: string;
+    index: number;
+}
+
+// compare message arrays
 const messagesEqual = (a: Message[], b: Message[]) => {
     if (a.length !== b.length) return false;
-    return a.every((msg, index) => msg.payload === b[index]?.payload);
+    return a.every((msg, index) =>
+        msg.payload === b[index]?.payload &&
+        msg.id === b[index]?.id
+    );
 };
 
-// Helper function to create stable message ID
-const createMessageId = (topicName: string, payload: string, index: number) => {
-    // Create a simple hash of the payload for stable IDs
-    const hash = payload.split('').reduce((a, b) => {
-        a = ((a << 5) - a) + b.charCodeAt(0);
-        return a & a;
-    }, 0);
-    return `${topicName}-${index}-${Math.abs(hash)}`;
+// get values from localStorage
+const getFromLocalStorage = (key: string, defaultValue: number): number => {
+    try {
+        const value = localStorage.getItem(key);
+        if (value === null) return defaultValue;
+        const parsed = parseInt(value, 10);
+        return isNaN(parsed) ? defaultValue : parsed;
+    } catch {
+        return defaultValue;
+    }
 };
 
 export function useMessages() {
@@ -32,41 +56,55 @@ export function useMessages() {
     const [currentTopic, setCurrentTopic] = useState<string | null>(null);
     const [autoRefresh, setAutoRefresh] = useState(true);
     const [refreshInterval, setRefreshInterval] = useState(1000);
-
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
-    const lastFetchTime = useRef<number>(0);
-
-    const fetchMessages = useCallback(async (topicName: string, silent = false) => {
+    const fetchMessages = useCallback(async (
+        topicName: string,
+        silent = false,
+        messageIndex = -1
+    ) => {
         if (!silent) {
             setIsLoading(true);
         }
         setError(null);
 
         try {
-            const response = await apiClient.get<TopicMessagesResponse>(
-                `${endpoints.getMessageFromTopic}?topic=${encodeURIComponent(topicName)}`
+            const brokerId = getFromLocalStorage('brokerId', -1);
+            const userId = getFromLocalStorage('userId', -1);
+
+            if (brokerId < 0 || userId < 0) {
+                throw new Error('Invalid broker ID or user ID. Please check your localStorage settings.');
+            }
+
+            const requestBody: TopicMessagesRequest = {
+                brokerUserIDs: {
+                    brokerId,
+                    userId,
+                },
+                topic: topicName,
+                index: messageIndex,
+            };
+
+            const response = await apiClient.post<TopicMessagesResponse>(
+                endpoints.getMessageFromTopic,
+                requestBody
             );
 
-            const currentTime = Date.now();
-
-            // Transform string messages into Message objects with stable IDs
-            const transformedMessages: Message[] = response.messages.map((payload, index) => ({
-                id: createMessageId(topicName, payload, index),
+            const transformedMessages: Message[] = response.messages.map((dbMessage) => ({
+                id: `${dbMessage.Id}-${dbMessage.BrokerId}-${dbMessage.TopicId}`, // Use actual field names
                 topic: response.topic,
-                payload: payload,
-                timestamp: new Date(lastFetchTime.current || currentTime).toISOString(),
-                qos: 0 as QoSLevel,
-            }));
+                payload: dbMessage.Message, // 'Message' field contains the payload
+                timestamp: dbMessage.CreationDate,
+                qos: dbMessage.QoS as QoSLevel,
+            })).reverse();
 
-            // Only update if messages actually changed
+            // update if messages actually changed
             setMessages(prevMessages => {
                 if (messagesEqual(prevMessages, transformedMessages)) {
-                    return prevMessages; // Return same reference to prevent re-render
+                    return prevMessages;
                 }
-                lastFetchTime.current = currentTime;
+                console.log("New Message: ", transformedMessages);
                 return transformedMessages;
             });
-
             return transformedMessages;
         } catch (err) {
             const errorObj = err instanceof Error ? err : new Error(String(err));
@@ -79,18 +117,17 @@ export function useMessages() {
         }
     }, []);
 
-    // Start watching a topic with auto-refresh
+    // watching a topic with auto-refresh
     const startWatching = useCallback((topicName: string) => {
         setCurrentTopic(topicName);
-        fetchMessages(topicName, false); // First fetch with loading
+        fetchMessages(topicName, false);
     }, [fetchMessages]);
 
-    // Stop watching
+    // stop watching
     const stopWatching = useCallback(() => {
         setCurrentTopic(null);
         setMessages([]);
         setError(null);
-        lastFetchTime.current = 0;
         if (intervalRef.current) {
             clearInterval(intervalRef.current);
             intervalRef.current = null;
@@ -107,11 +144,11 @@ export function useMessages() {
 
     const refresh = useCallback(() => {
         if (currentTopic) {
-            fetchMessages(currentTopic, false); // Manual refresh with loading
+            fetchMessages(currentTopic, false);
         }
     }, [currentTopic, fetchMessages]);
 
-    // Auto-refresh effect
+    // auto-refresh effect
     useEffect(() => {
         if (currentTopic && autoRefresh) {
             if (intervalRef.current) {
@@ -119,7 +156,7 @@ export function useMessages() {
             }
 
             intervalRef.current = setInterval(() => {
-                fetchMessages(currentTopic, true); // Silent refresh
+                fetchMessages(currentTopic, true);
             }, refreshInterval);
 
             return () => {
@@ -147,13 +184,17 @@ export function useMessages() {
     const clearMessages = useCallback(() => {
         setMessages([]);
         setError(null);
-        lastFetchTime.current = 0;
     }, []);
 
     const addMessage = useCallback((message: Message) => {
         setMessages(prev => [...prev, message]);
-        lastFetchTime.current = Date.now();
     }, []);
+
+    // current broker and user IDs from localStorage (for display purposes)
+    const getCurrentIds = useCallback(() => ({
+        brokerId: getFromLocalStorage('brokerId', -1),
+        userId: getFromLocalStorage('userId', -1),
+    }), []);
 
     return {
         messages,
@@ -170,5 +211,6 @@ export function useMessages() {
         refresh,
         toggleAutoRefresh,
         setRefreshRate,
+        getCurrentIds,
     };
 }

@@ -13,22 +13,31 @@ export function useTopics() {
         setError(null);
 
         try {
-            const response = await apiClient.get<{ topics: string[] }>(
-                endpoints.subscribedTopics
+            const userId = localStorage.getItem("userId");
+            const brokerId = localStorage.getItem("brokerId");
+
+            if (!userId || !brokerId) {
+                throw new Error("Missing userId or brokerId in localStorage.");
+            }
+
+            const payload = {
+                UserId: Number(userId),
+                BrokerId: Number(brokerId),
+            };
+
+            const response = await apiClient.post<{ Topics: Topic[] }>(
+                endpoints.getAllTopics,
+                payload
             );
 
-            const mappedTopics: Topic[] = response.topics.map((name: any) => ({
-                id: name,
-                name: name,
-                subscribed: true,
-            }));
-
-            setTopics(mappedTopics);
-            console.log("The Topics are here!", response);
-            return response;
+            const topicList = response.Topics;
+            setTopics(topicList);
+            console.log("Successfully fetched topics:", response);
+            return topicList;
         } catch (err) {
             const errorObj = err instanceof Error ? err : new Error(String(err));
             setError(errorObj);
+            console.error("Error fetching topics:", errorObj);
             throw errorObj;
         } finally {
             setIsLoading(false);

@@ -1,8 +1,5 @@
 const API_BASE_URL = "http://localhost:3000";
 
-/*
-* Base func for making API requests
-*/
 export async function fetchApi<T>(
     endpoint: string,
     options?: RequestInit
@@ -11,20 +8,18 @@ export async function fetchApi<T>(
 
     try {
         const response = await fetch(url, {
+            ...options,
             headers: {
                 'Content-Type': 'application/json',
-                ...options?.headers,
+                ...(options?.headers || {}),
             },
-            ...options,
         });
 
-        // Handle 4xx/5xx status codes
         if (!response.ok) {
             const errorText = await response.text();
             throw new Error(`API Error ${response.status}: ${errorText || response.statusText}`);
         }
 
-        // Parse JSON response
         const data = await response.json();
         return data as T;
     } catch (error) {
@@ -33,9 +28,6 @@ export async function fetchApi<T>(
     }
 }
 
-/**
- * Common API request methods
- */
 export const apiClient = {
     get: <T>(endpoint: string, params?: Record<string, string>): Promise<T> => {
         const url = params
@@ -52,20 +44,28 @@ export const apiClient = {
     post: <T, D = any>(endpoint: string, data?: D): Promise<T> => {
         return fetchApi<T>(endpoint, {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
             body: data ? JSON.stringify(data) : undefined,
         });
     },
 
-    put: <T, D = any>(endpoint: string, data?: D): Promise<T> => {
-        return fetchApi<T>(endpoint, {
-            method: 'PUT',
-            body: data ? JSON.stringify(data) : undefined,
-        });
-    },
+    /*
+    If someone want to add some HTTP -> PUT and DELETE
 
-    delete: <T>(endpoint: string): Promise<T> => {
-        return fetchApi<T>(endpoint, {
-            method: 'DELETE',
-        });
-    },
+        put: <T, D = any>(endpoint: string, data?: D): Promise<T> => {
+            return fetchApi<T>(endpoint, {
+                method: 'PUT',
+                body: data ? JSON.stringify(data) : undefined,
+            });
+        },
+
+        delete: <T>(endpoint: string): Promise<T> => {
+            return fetchApi<T>(endpoint, {
+                method: 'DELETE',
+            });
+        },
+
+     */
 };
