@@ -339,7 +339,7 @@ curl -X GET --header "Content-Type: application/json" --data '{"BrokerId":<BROKE
 
 ### To get all known topics:
 ```bash
-curl -X GET --header "Content-Type: Application/Json" --data '{"BrokerId":<BROKER-ID>,"UserId":<USER-ID>}' localhost:3000/topic/all-known
+curl -X POST --header "Content-Type: Application/Json" --data '{"BrokerId":<BROKER-ID>,"UserId":<USER-ID>}' localhost:3000/topic/all-known
 ```
 
 #### If the client is not authenticated yet, the server will return a 401 (Unauthorized) with a JSON:
@@ -708,5 +708,5 @@ curl -X POST -H "Content-Type: application/json" --data '{"Ip" : "localhost", "P
 curl -X POST -H "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":1, "UserId":1},"Topics":["Yare", "Starman", "Ora"]}' localhost:3000/topic/subscribe
 curl -X GET -H "Content-Type: application/json" --data '{"BrokerId":1, "UserId":1}' localhost:3000/topic/subscribed
 curl -X POST -H "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":1,"UserId":1},"Topic":"Yare","Message":"Yare yare daze"}' localhost:3000/topic/send-message
-curl -X GET --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":1, "UserId":1},"Topic":"Yare","Index":0}' localhost:3000/topic/messages
+curl -X POST --header "Content-Type: application/json" --data '{"BrokerUserIds":{"BrokerId":1, "UserId":1},"Topic":"Yare","Index":0}' localhost:3000/topic/messages
 ```
