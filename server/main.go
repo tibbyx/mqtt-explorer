@@ -14,6 +14,7 @@ import (
 	"github.com/eclipse/paho.mqtt.golang"
 	"time"
 	"strconv"
+	"os/exec"
 )
 
 // # Author
@@ -206,6 +207,12 @@ func main() {
 		log.Print(buildLogMessage(FATAL, "Issue with setting the database up", err.Error()))
 	}
 
+	// Browser automatisch öffnen (nur Windows)
+	go func() {
+		url := "http://localhost:3000"
+		exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	}()
+
 	server := fiber.New()
 
 	server.Use(cors.New(cors.Config{
@@ -220,7 +227,7 @@ func main() {
 	log.Print(buildLogMessage(OK, "Server Ready for MQTT-Sessions", ""))
 
 	// need to build ui via 'npm run build' in client first
-	server.Static("/", "../client/dist")
+	server.Static("/", "dist")
 	server.Listen(":3000")
 }
 
@@ -610,7 +617,7 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 				if token := serverState.mqttClient.Subscribe(toSubTopic, 0, nil); token.Wait() && token.Error() != nil {
 					log.Print(buildLogMessage(ERROR, fmt.Sprintf("ERROR: Subscription to topic %s failed!", toSubTopic), token.Error().Error()))
 					atLeastOneBadTopic = true
-					topicResult[toSubTopic] = TopicResult{"BigError", err.Error()}
+					topicResult[toSubTopic] = TopicResult{"BigError", token.Error().Error()}
 					continue
 				}
 				// INSERT TO TOPIC
@@ -634,7 +641,7 @@ func PostTopicSubscribeHandler(serverState *ServerState) fiber.Handler {
 				// SUBSCRIBE
 				if token := serverState.mqttClient.Subscribe(toSubTopic, 0, nil); token.Wait() && token.Error() != nil {
 					log.Print(buildLogMessage(ERROR, fmt.Sprintf("ERROR: Subscription to topic %s failed!", toSubTopic), token.Error().Error()))
-					topicResult[toSubTopic] = TopicResult{"BigError", err.Error()}
+					topicResult[toSubTopic] = TopicResult{"BigError", token.Error().Error()}
 					continue
 				}
 				// INSERT TO USERTOPICSUBSCRIBED

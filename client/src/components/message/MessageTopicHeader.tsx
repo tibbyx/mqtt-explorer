@@ -2,12 +2,8 @@ import {QosSelect} from "./QosSelect";
 import type {QoSLevel} from "@/lib/types";
 
 export interface TopicHeaderProps {
-    topicName: string;
-    isSubscribed: boolean;
-    onSubscriptionToggle: () => void;
     filterQos: QoSLevel | null;
     onFilterChange: (value: string) => void;
-    isLoading?: boolean;
 }
 
 export function MessageTopicHeader({

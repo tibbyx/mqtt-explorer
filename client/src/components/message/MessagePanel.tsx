@@ -18,8 +18,6 @@ export interface MessagePanelProps {
 
 export function MessagePanel({
                                  topic,
-                                 onSubscribe,
-                                 onUnsubscribe,
                              }: MessagePanelProps) {
     const {
         messages,
@@ -40,7 +38,6 @@ export function MessagePanel({
     const [messageText, setMessageText] = useState("");
     const [publishQosLevel, setPublishQosLevel] = useState<QoSLevel>(0);
     const [filterQos, setFilterQos] = useState<QoSLevel | null>(null);
-    const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -76,19 +73,6 @@ export function MessagePanel({
         }
     };
 
-    const handleSubscriptionToggle = () => {
-        if (!topic) return;
-        const newSubscriptionState = !isSubscribed;
-        if (newSubscriptionState) {
-            onSubscribe?.(topic.Id);
-            startWatching(topic.Topic);
-        } else {
-            onUnsubscribe?.(topic.Id);
-            stopWatching();
-        }
-        setIsSubscribed(newSubscriptionState);
-    };
-
     const handleQosFilterChange = (value: string) =>
         setFilterQos(value === "any" ? null : (parseInt(value) as QoSLevel));
 
@@ -99,12 +83,8 @@ export function MessagePanel({
     return (
         <div className="flex-1 flex flex-col h-full bg-gray-50 dark:bg-[var(--secondary-foreground)]">
             <MessageTopicHeader
-                topicName={topic.Topic}
-                isSubscribed={!!isSubscribed}
-                onSubscriptionToggle={handleSubscriptionToggle}
                 filterQos={filterQos}
                 onFilterChange={handleQosFilterChange}
-                isLoading={isLoading}
             />
             <MessagesContainer
                 ref={messagesContainerRef}

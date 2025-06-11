@@ -1,6 +1,8 @@
-import React from "react";
+import React, {useState, useEffect} from "react";
 import {Input} from "@/components/ui/input.tsx";
+import {Button} from "@/components/ui/button.tsx";
 import type {Topic} from "@/lib/types.ts";
+import {useTopicSubscription} from "@/api/hooks/useTopicSubscription.ts";
 
 interface TopicItemProps {
     topic: Topic;
@@ -10,6 +12,7 @@ interface TopicItemProps {
     onSelect: () => void;
     onStartEditing: (topic: Topic) => void;
     onEditNameChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onSubscriptionChange?: (topicId: number, subscribed: boolean) => void;
 }
 
 export default function TopicItem({
@@ -19,7 +22,35 @@ export default function TopicItem({
                                       selected,
                                       onSelect,
                                       onEditNameChange,
+                                      onSubscriptionChange,
                                   }: TopicItemProps) {
+    const {isLoading, toggleSubscription} = useTopicSubscription();
+    const [localSubscribed, setLocalSubscribed] = useState(topic.Subscribed);
+
+    useEffect(() => {
+        setLocalSubscribed(topic.Subscribed);
+    }, [topic.Subscribed]);
+
+    const handleToggleSubscription = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+
+        const newState = !localSubscribed;
+        setLocalSubscribed(newState);
+
+        try {
+            const actualNewState = await toggleSubscription(
+                topic.Topic,
+                localSubscribed
+            );
+
+            setLocalSubscribed(actualNewState);
+            onSubscriptionChange?.(Number(topic.Id), actualNewState);
+        } catch (error) {
+            console.error('Failed to toggle subscription:', error);
+            setLocalSubscribed(topic.Subscribed);
+        }
+    };
+
     if (isEditing) {
         return (
             <li>
@@ -54,12 +85,15 @@ export default function TopicItem({
                     {topic.Topic}
                 </span>
                 </div>
-                {1 === 1 && (
-                    <span
-                        className="text-xs px-2 py-0.5 rounded-full font-medium bg-[var(--background)] border border-[var(--border)] ml-2 flex-shrink-0">
-                    Subscribed
-                </span>
-                )}
+                <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleToggleSubscription}
+                    disabled={isLoading}
+                    className="text-xs px-2 py-0.5 h-auto rounded-full font-medium bg-[var(--background)] border border-[var(--border)] flex-shrink-0 hover:bg-[var(--background)]/80"
+                >
+                    {isLoading ? "..." : localSubscribed ? "Subscribed" : "Unsubscribed"}
+                </Button>
             </div>
         </li>
     );

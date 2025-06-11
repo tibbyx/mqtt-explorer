@@ -56,6 +56,15 @@ export function MessageComposer({
                             onChange={(e) => onMessageChange(e.target.value)}
                             className="min-h-[90px]"
                             disabled={isPublishing}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    const form = e.currentTarget.form;
+                                    if (form) {
+                                        form.requestSubmit();
+                                    }
+                                }
+                            }}
                         />
                     </div>
                     <div className="flex flex-col">

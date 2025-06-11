@@ -24,6 +24,8 @@ export const MessagesContainer = React.forwardRef<
         );
     }
 
+    console.log("Dom Messages: ", messages);
+
     if (error) {
         return (
             <div className="flex-1 flex items-center justify-center">

@@ -90,11 +90,13 @@ export function useMessages() {
             );
 
             const transformedMessages: Message[] = response.messages.map((dbMessage) => ({
-                id: `${dbMessage.Id}-${dbMessage.BrokerId}-${dbMessage.TopicId}`, // Use actual field names
+                id: `${dbMessage.Id}-${dbMessage.BrokerId}-${dbMessage.TopicId}`,
                 topic: response.topic,
-                payload: dbMessage.Message, // 'Message' field contains the payload
+                payload: dbMessage.Message,
                 timestamp: dbMessage.CreationDate,
                 qos: dbMessage.QoS as QoSLevel,
+                ClientId: dbMessage.ClientId
+
             })).reverse();
 
             // update if messages actually changed
@@ -154,7 +156,6 @@ export function useMessages() {
             if (intervalRef.current) {
                 clearInterval(intervalRef.current);
             }
-
             intervalRef.current = setInterval(() => {
                 fetchMessages(currentTopic, true);
             }, refreshInterval);

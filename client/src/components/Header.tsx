@@ -25,7 +25,6 @@ interface HeaderProps {
 export function Header({isConnected, onToggleConnect, onSearch}: HeaderProps) {
     const [searchValue, setSearchValue] = useState("");
 
-    // Debounce search input
     const debouncedSearch = debounce((value: string) => {
         onSearch(value);
     }, 300);
@@ -35,6 +34,9 @@ export function Header({isConnected, onToggleConnect, onSearch}: HeaderProps) {
         setSearchValue(value);
         debouncedSearch(value);
     };
+
+    const ip = localStorage.getItem("ip");
+    const port = localStorage.getItem("port");
 
     return (
         <header className="h-16 px-6 flex items-center justify-between bg-[var(--background)]">
@@ -49,7 +51,7 @@ export function Header({isConnected, onToggleConnect, onSearch}: HeaderProps) {
                     >
                         <div className="flex items-center gap-1.5">
                             <Wifi className="h-3 w-3"/>
-                            <span className="font-medium">Connected</span>
+                            <span className="font-medium">Connected - {ip}:{port}</span>
                         </div>
                     </Badge>
                 )}
@@ -105,7 +107,7 @@ export function Header({isConnected, onToggleConnect, onSearch}: HeaderProps) {
                                 <span>Disconnect</span>
                             </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem>
+                        <DropdownMenuItem disabled>
                             <Settings className="mr-2 h-4 w-4"/>
                             <span>Settings</span>
                         </DropdownMenuItem>
